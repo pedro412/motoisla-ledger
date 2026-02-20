@@ -16,6 +16,8 @@ export const SaleCreateSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   channel: z.enum(["STORE", "ONLINE", "OTHER"]),
   notes: z.string().optional().default(""),
+  terminalPayment: z.boolean().default(false),
+  threeMonthsNoInterest: z.boolean().default(false),
   lines: z
     .array(
       z.object({

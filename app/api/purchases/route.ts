@@ -3,6 +3,7 @@ import { z } from "zod";
 import { uid } from "@/lib/ids";
 import { parseLS2InvoiceText } from "@/lib/parse/ls2Invoice";
 import { appendRow } from "@/lib/sheets";
+import { appendCapitalMovement, getOwnerCapitalSnapshot } from "@/lib/capital";
 import { allocateTaxByLines } from "@/lib/tax";
 import { PurchaseImportSchema } from "@/types/schemas";
 
@@ -13,12 +14,18 @@ export async function POST(req: Request) {
     const purchaseId = uid("pur");
     const rawDocId = uid("raw");
     const createdAt = new Date().toISOString();
+    const capital = await getOwnerCapitalSnapshot(body.defaultOwnerId);
+    if (body.totalGross > capital.currentCapital) {
+      throw new Error(
+        `Capital insuficiente para ${body.defaultOwnerId}. Disponible=${round2(capital.currentCapital)} requerido=${round2(body.totalGross)}`
+      );
+    }
 
     const parsed = parseLS2InvoiceText(body.rawText);
     const lineNets = parsed.map((line) => line.lineTotalNet);
     const taxes = allocateTaxByLines(lineNets, body.taxTotal, body.taxRate);
 
-    await appendRow("Purchases", [
+    await appendRow("Compras", [
       purchaseId,
       body.date,
       body.supplier,
@@ -41,7 +48,7 @@ export async function POST(req: Request) {
       const unitCostNetExact = p.lineTotalNet / p.qty;
       const unitCostGrossExact = lineGross / p.qty;
 
-      await appendRow("PurchaseLines", [
+      await appendRow("LineasCompra", [
         purchaseLineId,
         purchaseId,
         i + 1,
@@ -58,7 +65,7 @@ export async function POST(req: Request) {
         round6(unitCostGrossExact),
       ]);
 
-      await appendRow("Lots", [
+      await appendRow("Lotes", [
         lotId,
         purchaseId,
         purchaseLineId,
@@ -71,6 +78,14 @@ export async function POST(req: Request) {
         createdAt,
       ]);
     }
+
+    await appendCapitalMovement({
+      ownerId: body.defaultOwnerId,
+      type: "COMPRA",
+      amount: -body.totalGross,
+      referenceId: purchaseId,
+      date: body.date,
+    });
 
     return NextResponse.json({ ok: true, purchaseId });
   } catch (error) {

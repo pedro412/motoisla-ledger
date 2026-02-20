@@ -38,92 +38,105 @@ motoisla-ledger/
 
 Crea estas pestañas con estos encabezados (fila 1):
 
-### Investors
-- investor_id
-- name
-- type (INVESTOR | MOTOISLA)
-- created_at
+### Inversionistas
+- id_inversionista
+- nombre
+- tipo (INVESTOR | MOTOISLA)
+- capital_inicial
+- creado_en
 
-### Purchases
-- purchase_id
+### Compras
+- id_compra
 - date (YYYY-MM-DD)
-- supplier
-- invoice_ref
-- subtotal_net
-- tax_total
-- total_gross
-- tax_rate
-- raw_doc_id
-- created_at
+- proveedor
+- referencia_factura
+- subtotal_neto
+- impuesto_total
+- total_bruto
+- tasa_impuesto
+- id_documento_raw
+- creado_en
 
-### PurchaseLines
-- purchase_line_id
-- purchase_id
-- line_no
-- supplier_sku
-- unit
-- description_raw
-- qty
-- line_total_net
-- sat_product_key
+### LineasCompra
+- id_linea_compra
+- id_compra
+- numero_linea
+- sku_proveedor
+- unidad
+- descripcion_raw
+- cantidad
+- total_linea_neto
+- clave_sat_producto
 - pedimento
-- line_tax_allocated
-- line_total_gross
-- unit_cost_net_exact
-- unit_cost_gross_exact
+- impuesto_asignado_linea
+- total_linea_bruto
+- costo_unitario_neto_exacto
+- costo_unitario_bruto_exacto
 
-### Lots
-- lot_id
-- purchase_id
-- purchase_line_id
-- owner_id
-- supplier_sku
-- internal_sku
-- description
-- qty_bought
-- unit_cost_gross
-- created_at
+### Lotes
+- id_lote
+- id_compra
+- id_linea_compra
+- id_owner
+- sku_proveedor
+- sku_interno
+- descripcion
+- cantidad_comprada
+- costo_unitario_bruto
+- creado_en
 
-### Sales
-- sale_id
+### Ventas
+- id_venta
 - date
-- channel
-- total_gross
-- notes
-- created_at
+- canal
+- total_bruto
+- notas
+- creado_en
 
-### SaleLines
-- sale_line_id
-- sale_id
-- lot_id
+### LineasVenta
+- id_linea_venta
+- id_venta
+- id_lote
 - sku
-- qty
-- unit_price_gross
-- discount_gross
-- revenue_gross
-- cogs_gross
-- profit_gross
+- cantidad
+- precio_unitario_bruto
+- descuento_bruto
+- ingreso_bruto
+- costo_ventas_bruto
+- utilidad_bruta
 
-### ProfitSplits
-- split_id
-- sale_id
-- owner_id
-- profit_share_gross
+### RepartosUtilidad
+- id_reparto
+- id_venta
+- id_owner
+- participacion_utilidad_bruta
 - status
-- created_at
+- creado_en
 
-## Configuración Google Cloud / Service Account
+### MovimientosCapital
+- id_movimiento
+- id_owner
+- tipo (COMPRA | VENTA_COSTO)
+- monto
+- referencia_id
+- fecha
+- creado_en
+
+## Configuración Google Cloud / OAuth
 
 1. Habilita **Google Sheets API**.
-2. Crea una **Service Account** y genera su JSON key.
-3. Comparte el Google Sheet al correo de la Service Account como **Editor**.
-4. Convierte el JSON de la SA a base64 y colócalo en `.env.local`.
+2. Configura la pantalla de consentimiento OAuth en Google Cloud (tipo Interno o Externo).
+3. Crea un **OAuth Client ID** (Desktop App o Web App).
+4. Obtén un `refresh_token` para el scope `https://www.googleapis.com/auth/spreadsheets`.
+5. Comparte el Google Sheet al usuario que autorizó OAuth como **Editor** (si no es owner).
 
 ## Variables de entorno
 
 ```bash
 GOOGLE_SHEETS_SPREADSHEET_ID=xxxxxxxxxxxxxxxxxxxx
-GOOGLE_SERVICE_ACCOUNT_JSON_BASE64=eyJ0eXBlIjoi...
+GOOGLE_OAUTH_CLIENT_ID=xxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com
+GOOGLE_OAUTH_CLIENT_SECRET=xxxxxxxxxxxxxxxxxxxx
+GOOGLE_OAUTH_REFRESH_TOKEN=1//xxxxxxxxxxxxxxxxxxxx
 DEFAULT_INVESTOR_ID=inv_default
 MOTOISLA_OWNER_ID=motoisla_owner
 ```
@@ -139,27 +152,46 @@ Request:
 Proceso:
 1. Parsea líneas (`lib/parse/ls2Invoice.ts`)
 2. Asigna IVA por línea (`lib/tax.ts`) para cuadrar contra factura
-3. Append en `Purchases`, `PurchaseLines` y `Lots`
+3. Valida capital disponible del owner en `Inversionistas` + `MovimientosCapital`
+4. Append en `Compras`, `LineasCompra` y `Lotes`
+5. Registra salida de capital en `MovimientosCapital` (tipo `COMPRA`)
 
 ### POST `/api/sales`
 Crea venta con líneas por lote.
 
 Request:
-- date,channel,notes,lines[{lotId,sku,qty,unitPriceGross,discountGross}]
+- date,channel,notes,terminalPayment,threeMonthsNoInterest,lines[{lotId,sku,qty,unitPriceGross,discountGross}]
 
 Proceso:
-1. Lee `Lots` para costo y owner
-2. Calcula revenue/cogs/profit
-3. Append en `Sales`, `SaleLines`, `ProfitSplits` (50/50, ACCRUED)
+1. Lee `Lotes` para costo y owner
+2. Calcula comisión por terminal (2.00% o 5.58%), revenue neto, cogs y utilidad
+3. Append en `Ventas`, `LineasVenta`, `RepartosUtilidad` (50/50, ACCRUED)
+4. Registra regreso de costo al capital en `MovimientosCapital` (tipo `VENTA_COSTO`)
 
 ### GET `/api/sheets`
 Healthcheck básico de conexión a Sheets.
+
+### POST `/api/sheets/init`
+Crea las pestañas necesarias (`Inversionistas`, `Compras`, `LineasCompra`, `Lotes`, `Ventas`, `LineasVenta`, `RepartosUtilidad`, `MovimientosCapital`) y agrega/actualiza encabezados en fila 1.
+
+### GET `/api/lots`
+Devuelve lotes con existencia disponible para autocompletar ventas (`lotId`, `sku`, `qtyAvailable`, `ownerId`, etc.).
+
+### POST `/api/capital/reconcile`
+Reconstruye `MovimientosCapital` desde `Lotes` (salidas por compra) y `LineasVenta` (regreso de costo por venta), limpiando primero los movimientos existentes.
+
+### POST `/api/capital/transfer-profit`
+Transfiere utilidad acumulada a capital disponible para un owner, registrando el movimiento auditable en `MovimientosCapital` con tipo `UTILIDAD_A_CAPITAL`.
+
+### POST `/api/sales/recalculate`
+Recalcula comisiones de terminal y utilidad histórica en `LineasVenta` usando los flags de cada venta (`pago_terminal`, `meses_sin_intereses_3`), y reconstruye `RepartosUtilidad` para cuadrar utilidades.
 
 ## UI
 
 - `/purchases/new`: formulario de importación de compra + textarea de factura
 - `/sales/new`: formulario de venta con líneas dinámicas
 - `/dashboard`: agregados de ventas/compras/utilidad + inventario/utilidad por owner
+- `/inventario`: inventario actual por factura/compra, con lotes en cajas y estatus de stock
 
 ## Ejecutar
 
