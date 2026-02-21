@@ -1,7 +1,7 @@
+import { CapitalMovementType, OwnerType, Prisma } from "@prisma/client";
 import { uid } from "@/lib/ids";
-import { appendRow, getAllRows, getSheetsClient } from "@/lib/sheets";
+import { db } from "@/lib/db";
 
-type CapitalMovementType = "COMPRA" | "VENTA_COSTO";
 type ProfitTransferResult = {
   ownerId: string;
   availableProfit: number;
@@ -9,151 +9,117 @@ type ProfitTransferResult = {
   currentCapitalAfter: number;
 };
 
+type MovementKind = CapitalMovementType | "UTILIDAD_A_CAPITAL";
+
 export async function reconcileCapitalMovementsFromLedger() {
-  const [purchases, lots, sales, saleLines] = await Promise.all([
-    getAllRows("Compras"),
-    getAllRows("Lotes"),
-    getAllRows("Ventas"),
-    getAllRows("LineasVenta"),
-  ]);
+  return db.$transaction(async (tx) => {
+    await tx.capitalMovement.deleteMany({
+      where: { type: { in: [CapitalMovementType.COMPRA, CapitalMovementType.VENTA_COSTO] } },
+    });
 
-  const purchasesIdx = indexMap(purchases.headers);
-  const lotsIdx = indexMap(lots.headers);
-  const salesIdx = indexMap(sales.headers);
-  const saleLinesIdx = indexMap(saleLines.headers);
+    const purchases = await tx.purchase.findMany({
+      select: { id: true, ownerId: true, totalGross: true, date: true },
+    });
 
-  const purchaseDateById = new Map<string, string>();
-  for (const row of purchases.rows) {
-    const purchaseId = row[purchasesIdx.id_compra];
-    if (!purchaseId) continue;
-    purchaseDateById.set(purchaseId, row[purchasesIdx.date] ?? "");
-  }
+    if (purchases.length > 0) {
+      await tx.capitalMovement.createMany({
+        data: purchases.map((p) => ({
+          id: uid("cap"),
+          ownerId: p.ownerId,
+          type: CapitalMovementType.COMPRA,
+          amount: new Prisma.Decimal(0).sub(p.totalGross),
+          referenceType: "PURCHASE",
+          referenceId: p.id,
+          date: p.date,
+          notes: "reconcile",
+        })),
+      });
+    }
 
-  const saleDateById = new Map<string, string>();
-  for (const row of sales.rows) {
-    const saleId = row[salesIdx.id_venta];
-    if (!saleId) continue;
-    saleDateById.set(saleId, row[salesIdx.date] ?? "");
-  }
+    const grouped = await tx.saleLine.groupBy({
+      by: ["saleId", "lotId"],
+      _sum: { cogsGross: true },
+    });
+    const lots = await tx.lot.findMany({
+      where: { id: { in: grouped.map((g) => g.lotId) } },
+      select: { id: true, ownerId: true },
+    });
+    const ownerByLot = new Map(lots.map((l) => [l.id, l.ownerId]));
 
-  const lotOwnerById = new Map<string, string>();
-  const purchaseMovements: (string | number)[][] = [];
-  for (const row of lots.rows) {
-    const lotId = row[lotsIdx.id_lote];
-    const ownerId = row[lotsIdx.id_owner];
-    const purchaseId = row[lotsIdx.id_compra];
-    const qtyBought = toNumber(row[lotsIdx.cantidad_comprada]);
-    const unitCost = toNumber(row[lotsIdx.costo_unitario_bruto]);
-    const purchaseCost = round2(qtyBought * unitCost);
-    const date = purchaseDateById.get(purchaseId) || row[lotsIdx.creado_en] || "";
+    if (grouped.length > 0) {
+      await tx.capitalMovement.createMany({
+        data: grouped
+          .filter((g) => ownerByLot.has(g.lotId))
+          .map((g) => ({
+            id: uid("cap"),
+            ownerId: ownerByLot.get(g.lotId) as string,
+            type: CapitalMovementType.VENTA_COSTO,
+            amount: g._sum.cogsGross ?? new Prisma.Decimal(0),
+            referenceType: "SALE",
+            referenceId: g.saleId,
+            date: new Date(),
+            notes: "reconcile",
+          })),
+      });
+    }
 
-    if (!lotId || !ownerId || purchaseCost === 0) continue;
-    lotOwnerById.set(lotId, ownerId);
-
-    purchaseMovements.push([
-      uid("cap"),
-      ownerId,
-      "COMPRA",
-      -purchaseCost,
-      purchaseId || lotId,
-      date,
-      new Date().toISOString(),
-    ]);
-  }
-
-  const saleCostMovements: (string | number)[][] = [];
-  for (const row of saleLines.rows) {
-    const lotId = row[saleLinesIdx.id_lote];
-    const saleId = row[saleLinesIdx.id_venta];
-    const ownerId = lotOwnerById.get(lotId);
-    const cogs = round2(toNumber(row[saleLinesIdx.costo_ventas_bruto]));
-    const date = saleDateById.get(saleId) || "";
-
-    if (!ownerId || cogs === 0) continue;
-
-    saleCostMovements.push([
-      uid("cap"),
-      ownerId,
-      "VENTA_COSTO",
-      cogs,
-      saleId || lotId,
-      date,
-      new Date().toISOString(),
-    ]);
-  }
-
-  const rows = [...purchaseMovements, ...saleCostMovements];
-  await replaceCapitalMovements(rows);
-
-  return {
-    total: rows.length,
-    compras: purchaseMovements.length,
-    ventasCosto: saleCostMovements.length,
-  };
+    return {
+      total: purchases.length + grouped.length,
+      compras: purchases.length,
+      ventasCosto: grouped.length,
+    };
+  });
 }
 
 export async function getOwnerInitialCapital(ownerId: string) {
-  const { headers, rows } = await getAllRows("Inversionistas");
-  const idx = indexMap(headers);
-
-  const ownerIdx = idx.id_inversionista;
-  const capitalIdx = idx.capital_inicial;
-
-  if (ownerIdx == null) {
-    throw new Error("Falta columna id_inversionista en Inversionistas");
+  const owner = await db.owner.findUnique({
+    where: { id: ownerId },
+    select: { initialCapital: true },
+  });
+  if (!owner) {
+    throw new Error(`No existe ${ownerId} en owners`);
   }
-  if (capitalIdx == null) {
-    throw new Error("Falta columna capital_inicial en Inversionistas");
-  }
-
-  const ownerRow = rows.find((row) => row[ownerIdx] === ownerId);
-  if (!ownerRow) {
-    throw new Error(`No existe ${ownerId} en Inversionistas`);
-  }
-
-  return toNumber(ownerRow[capitalIdx]);
+  return toNumber(owner.initialCapital);
 }
 
 export async function getOwnerCapitalSnapshot(ownerId: string) {
   const initialCapital = await getOwnerInitialCapital(ownerId);
-  const { headers, rows } = await getAllRows("MovimientosCapital");
-  const idx = indexMap(headers);
+  const aggregate = await db.capitalMovement.aggregate({
+    where: { ownerId },
+    _sum: { amount: true },
+  });
 
-  const ownerIdx = idx.id_owner;
-  const amountIdx = idx.monto;
-  if (ownerIdx == null || amountIdx == null) {
-    throw new Error("Faltan columnas id_owner/monto en MovimientosCapital");
-  }
-
-  let flow = 0;
-  for (const row of rows) {
-    if (row[ownerIdx] !== ownerId) continue;
-    flow += toNumber(row[amountIdx]);
-  }
-
+  const flow = toNumber(aggregate._sum.amount);
   return {
     initialCapital,
     capitalFlow: flow,
-    currentCapital: initialCapital + flow,
+    currentCapital: round2(initialCapital + flow),
   };
 }
 
 export async function appendCapitalMovement(params: {
   ownerId: string;
-  type: CapitalMovementType | "UTILIDAD_A_CAPITAL";
+  type: MovementKind;
   amount: number;
   referenceId: string;
   date: string;
+  notes?: string;
 }) {
-  await appendRow("MovimientosCapital", [
-    uid("cap"),
-    params.ownerId,
-    params.type,
-    round2(params.amount),
-    params.referenceId,
-    params.date,
-    new Date().toISOString(),
-  ]);
+  const type = params.type === "UTILIDAD_A_CAPITAL" ? CapitalMovementType.UTILIDAD_A_CAPITAL : params.type;
+  const referenceType = inferReferenceType(type);
+
+  await db.capitalMovement.create({
+    data: {
+      id: uid("cap"),
+      ownerId: params.ownerId,
+      type,
+      amount: new Prisma.Decimal(round2(params.amount)),
+      referenceType,
+      referenceId: params.referenceId,
+      date: new Date(params.date),
+      notes: params.notes ?? null,
+    },
+  });
 }
 
 export async function transferProfitToCapital(ownerId: string, requestedAmount?: number): Promise<ProfitTransferResult> {
@@ -192,80 +158,60 @@ export async function transferProfitToCapital(ownerId: string, requestedAmount?:
   };
 }
 
-function indexMap(headers: string[]) {
-  const m: Record<string, number> = {};
-  headers.forEach((h, i) => {
-    m[h] = i;
-  });
-  return m;
+export async function resolveProfitOwners() {
+  const [investor, motoIsla] = await Promise.all([
+    db.owner.findFirst({
+      where: { type: OwnerType.INVESTOR },
+      select: { id: true },
+      orderBy: { createdAt: "asc" },
+    }),
+    db.owner.findFirst({
+      where: { type: OwnerType.MOTOISLA },
+      select: { id: true },
+      orderBy: { createdAt: "asc" },
+    }),
+  ]);
+
+  if (!investor) {
+    throw new Error("No hay owner tipo INVESTOR configurado");
+  }
+  if (!motoIsla) {
+    throw new Error("No hay owner tipo MOTOISLA configurado");
+  }
+
+  return { investorOwnerId: investor.id, motoIslaOwnerId: motoIsla.id };
 }
 
-function toNumber(value: string | number | undefined) {
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? value : 0;
-  }
-  const normalized = String(value ?? "0")
-    .replace(/\$/g, "")
-    .replace(/,/g, "")
-    .trim();
-  const n = Number(normalized);
-  return Number.isFinite(n) ? n : 0;
+function inferReferenceType(type: CapitalMovementType) {
+  if (type === CapitalMovementType.COMPRA) return "PURCHASE";
+  if (type === CapitalMovementType.VENTA_COSTO) return "SALE";
+  return "TRANSFER";
+}
+
+async function getOwnerAccruedProfit(ownerId: string) {
+  const aggregate = await db.profitSplit.aggregate({
+    where: { ownerId },
+    _sum: { profitShareGross: true },
+  });
+  return round2(toNumber(aggregate._sum.profitShareGross));
+}
+
+async function getOwnerTransferredProfit(ownerId: string) {
+  const aggregate = await db.capitalMovement.aggregate({
+    where: {
+      ownerId,
+      type: CapitalMovementType.UTILIDAD_A_CAPITAL,
+    },
+    _sum: { amount: true },
+  });
+  return round2(toNumber(aggregate._sum.amount));
+}
+
+function toNumber(value: Prisma.Decimal | number | null | undefined) {
+  if (value == null) return 0;
+  return Number(value);
 }
 
 function round2(n: number) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
-}
-
-async function getOwnerAccruedProfit(ownerId: string) {
-  const { headers, rows } = await getAllRows("RepartosUtilidad");
-  const idx = indexMap(headers);
-  const ownerIdx = idx.id_owner;
-  const amountIdx = idx.participacion_utilidad_bruta;
-  if (ownerIdx == null || amountIdx == null) return 0;
-
-  let total = 0;
-  for (const row of rows) {
-    if (row[ownerIdx] !== ownerId) continue;
-    total += toNumber(row[amountIdx]);
-  }
-  return round2(total);
-}
-
-async function getOwnerTransferredProfit(ownerId: string) {
-  const { headers, rows } = await getAllRows("MovimientosCapital");
-  const idx = indexMap(headers);
-  const ownerIdx = idx.id_owner;
-  const amountIdx = idx.monto;
-  const typeIdx = idx.tipo;
-  if (ownerIdx == null || amountIdx == null || typeIdx == null) return 0;
-
-  let total = 0;
-  for (const row of rows) {
-    if (row[ownerIdx] !== ownerId) continue;
-    if (String(row[typeIdx] || "").toUpperCase() !== "UTILIDAD_A_CAPITAL") continue;
-    total += toNumber(row[amountIdx]);
-  }
-  return round2(total);
-}
-
-async function replaceCapitalMovements(rows: (string | number)[][]) {
-  const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
-  if (!spreadsheetId) {
-    throw new Error("Missing GOOGLE_SHEETS_SPREADSHEET_ID");
-  }
-
-  const sheets = getSheetsClient();
-  await sheets.spreadsheets.values.clear({
-    spreadsheetId,
-    range: "MovimientosCapital!A2:Z",
-  });
-
-  if (!rows.length) return;
-
-  await sheets.spreadsheets.values.update({
-    spreadsheetId,
-    range: "MovimientosCapital!A2",
-    valueInputOption: "RAW",
-    requestBody: { values: rows },
-  });
 }

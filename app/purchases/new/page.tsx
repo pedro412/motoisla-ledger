@@ -1,10 +1,55 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
+
+type Investor = {
+  id: string;
+  nombre: string;
+};
 
 export default function NewPurchasePage() {
+  const [investors, setInvestors] = useState<Investor[]>([]);
+  const [selectedOwnerId, setSelectedOwnerId] = useState("");
+  const [loadingInvestors, setLoadingInvestors] = useState(true);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<string>("");
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadInvestors() {
+      setLoadingInvestors(true);
+      try {
+        const res = await fetch("/api/investors", { cache: "no-store" });
+        const json = await res.json();
+        if (!res.ok || !json.ok) {
+          throw new Error(json.error || "No se pudieron cargar inversionistas");
+        }
+        if (!cancelled) {
+          const list = (json.investors as Investor[]) ?? [];
+          setInvestors(list);
+          setSelectedOwnerId((prev) => prev || list[0]?.id || "");
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setResult(
+            JSON.stringify(
+              { ok: false, error: error instanceof Error ? error.message : "Error cargando inversionistas" },
+              null,
+              2,
+            ),
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingInvestors(false);
+        }
+      }
+    }
+    loadInvestors();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -21,7 +66,7 @@ export default function NewPurchasePage() {
       totalGross: Number(form.get("totalGross") || 0),
       taxRate: Number(form.get("taxRate") || 0.16),
       rawText: String(form.get("rawText") || ""),
-      defaultOwnerId: String(form.get("defaultOwnerId") || ""),
+      defaultOwnerId: selectedOwnerId,
     };
 
     const res = await fetch("/api/purchases", {
@@ -47,7 +92,21 @@ export default function NewPurchasePage() {
           <label>IVA total<input name="taxTotal" type="number" step="0.01" required /></label>
           <label>Total bruto<input name="totalGross" type="number" step="0.01" required /></label>
           <label>Tasa IVA<input name="taxRate" type="number" step="0.01" defaultValue="0.16" /></label>
-          <label>Owner por defecto<input name="defaultOwnerId" required /></label>
+          <label>
+            Inversionista
+            <select
+              value={selectedOwnerId}
+              onChange={(e) => setSelectedOwnerId(e.target.value)}
+              disabled={loadingInvestors || investors.length === 0}
+              required
+            >
+              {investors.map((inv) => (
+                <option key={inv.id} value={inv.id}>
+                  {inv.nombre} ({inv.id})
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
         <label>
           Texto de factura LS2

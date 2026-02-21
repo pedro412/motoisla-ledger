@@ -1,4 +1,5 @@
-import { getAllRows } from "@/lib/sheets";
+import { Prisma } from "@prisma/client";
+import { db } from "@/lib/db";
 
 type PurchaseGroup = {
   purchaseId: string;
@@ -20,65 +21,61 @@ type LotView = {
 };
 
 export default async function InventarioPage() {
-  const [purchases, lots, saleLines] = await Promise.all([
-    safeRows("Compras"),
-    safeRows("Lotes"),
-    safeRows("LineasVenta"),
+  const [purchases, lots, soldRows] = await Promise.all([
+    db.purchase.findMany({
+      select: { id: true, supplier: true, date: true, invoiceRef: true },
+      orderBy: { date: "desc" },
+    }),
+    db.lot.findMany({
+      select: {
+        id: true,
+        purchaseId: true,
+        ownerId: true,
+        supplierSku: true,
+        description: true,
+        qtyBought: true,
+        unitCostGross: true,
+      },
+    }),
+    db.saleLine.groupBy({
+      by: ["lotId"],
+      _sum: { qty: true },
+    }),
   ]);
 
-  const purchaseIdx = indexMap(purchases.headers);
-  const lotIdx = indexMap(lots.headers);
-  const saleLineIdx = indexMap(saleLines.headers);
-  const soldByLot = new Map<string, number>();
-
-  for (const row of saleLines.rows) {
-    const lotId = row[saleLineIdx.id_lote];
-    if (!lotId) continue;
-    const qty = toNumber(row[saleLineIdx.cantidad]);
-    soldByLot.set(lotId, (soldByLot.get(lotId) ?? 0) + qty);
-  }
-
-  const purchaseMeta = new Map<string, { supplier: string; date: string; invoiceRef: string }>();
-  for (const row of purchases.rows) {
-    const purchaseId = row[purchaseIdx.id_compra];
-    if (!purchaseId) continue;
-    purchaseMeta.set(purchaseId, {
-      supplier: row[purchaseIdx.proveedor] ?? "",
-      date: row[purchaseIdx.date] ?? "",
-      invoiceRef: row[purchaseIdx.referencia_factura] ?? "",
-    });
-  }
+  const soldByLot = new Map(soldRows.map((r) => [r.lotId, toNumber(r._sum.qty)]));
+  const purchaseMeta = new Map(
+    purchases.map((p) => [p.id, { supplier: p.supplier, date: p.date.toISOString().slice(0, 10), invoiceRef: p.invoiceRef }]),
+  );
 
   const groups = new Map<string, PurchaseGroup>();
-  for (const row of lots.rows) {
-    const purchaseId = row[lotIdx.id_compra] ?? "SIN_COMPRA";
-    const lotId = row[lotIdx.id_lote] ?? "SIN_LOTE";
-    const qtyBought = toNumber(row[lotIdx.cantidad_comprada]);
-    const qtySold = soldByLot.get(lotId) ?? 0;
+  for (const lot of lots) {
+    const qtyBought = toNumber(lot.qtyBought);
+    const qtySold = soldByLot.get(lot.id) ?? 0;
     const qtyAvailable = round6(qtyBought - qtySold);
 
-    const lot: LotView = {
-      lotId,
-      ownerId: row[lotIdx.id_owner] ?? "",
-      sku: row[lotIdx.sku_proveedor] ?? "",
-      description: row[lotIdx.descripcion] ?? "",
+    const lotView: LotView = {
+      lotId: lot.id,
+      ownerId: lot.ownerId,
+      sku: lot.supplierSku ?? "",
+      description: lot.description,
       qtyBought,
       qtySold,
       qtyAvailable,
-      unitCostGross: toNumber(row[lotIdx.costo_unitario_bruto]),
+      unitCostGross: toNumber(lot.unitCostGross),
     };
 
-    const meta = purchaseMeta.get(purchaseId) ?? { supplier: "", date: "", invoiceRef: "" };
-    const current = groups.get(purchaseId);
+    const meta = purchaseMeta.get(lot.purchaseId) ?? { supplier: "", date: "", invoiceRef: "" };
+    const current = groups.get(lot.purchaseId);
     if (current) {
-      current.lots.push(lot);
+      current.lots.push(lotView);
     } else {
-      groups.set(purchaseId, {
-        purchaseId,
+      groups.set(lot.purchaseId, {
+        purchaseId: lot.purchaseId,
         supplier: meta.supplier,
         date: meta.date,
         invoiceRef: meta.invoiceRef,
-        lots: [lot],
+        lots: [lotView],
       });
     }
   }
@@ -146,30 +143,9 @@ export default async function InventarioPage() {
   );
 }
 
-async function safeRows(sheetName: string) {
-  try {
-    return await getAllRows(sheetName);
-  } catch {
-    return { headers: [] as string[], rows: [] as string[][] };
-  }
-}
-
-function indexMap(headers: string[]) {
-  const m: Record<string, number> = {};
-  headers.forEach((h, i) => {
-    m[h] = i;
-  });
-  return m;
-}
-
-function toNumber(value: string | number | undefined) {
-  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
-  const normalized = String(value ?? "0")
-    .replace(/\$/g, "")
-    .replace(/,/g, "")
-    .trim();
-  const n = Number(normalized);
-  return Number.isFinite(n) ? n : 0;
+function toNumber(value: Prisma.Decimal | number | null | undefined) {
+  if (value == null) return 0;
+  return Number(value);
 }
 
 function parseDate(date: string) {

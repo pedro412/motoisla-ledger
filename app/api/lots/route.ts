@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getAllRows } from "@/lib/sheets";
+import { Prisma } from "@prisma/client";
+import { db } from "@/lib/db";
 
 type LotOption = {
   lotId: string;
@@ -10,43 +11,45 @@ type LotOption = {
   description: string;
 };
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    const [lots, saleLines] = await Promise.all([getAllRows("Lotes"), getAllRows("LineasVenta")]);
+    const { searchParams } = new URL(req.url);
+    const ownerId = searchParams.get("ownerId");
 
-    const lotIdx = indexMap(lots.headers);
-    const lineIdx = indexMap(saleLines.headers);
-    const soldByLot = new Map<string, number>();
+    const lots = await db.lot.findMany({
+      where: ownerId ? { ownerId } : undefined,
+      select: {
+        id: true,
+        ownerId: true,
+        supplierSku: true,
+        description: true,
+        unitCostGross: true,
+        qtyBought: true,
+      },
+      orderBy: { id: "asc" },
+    });
 
-    for (const row of saleLines.rows) {
-      const lotId = row[lineIdx.id_lote];
-      if (!lotId) continue;
-      const qty = Number(row[lineIdx.cantidad] ?? 0);
-      soldByLot.set(lotId, (soldByLot.get(lotId) ?? 0) + qty);
-    }
+    const soldRows = await db.saleLine.groupBy({
+      by: ["lotId"],
+      where: { lotId: { in: lots.map((l) => l.id) } },
+      _sum: { qty: true },
+    });
+    const soldByLot = new Map(soldRows.map((r) => [r.lotId, toNumber(r._sum.qty)]));
 
     const options: LotOption[] = [];
-
-    for (const row of lots.rows) {
-      const lotId = row[lotIdx.id_lote];
-      if (!lotId) continue;
-
-      const qtyBought = Number(row[lotIdx.cantidad_comprada] ?? 0);
-      const qtySold = soldByLot.get(lotId) ?? 0;
-      const qtyAvailable = round6(qtyBought - qtySold);
+    for (const lot of lots) {
+      const qtyAvailable = round6(toNumber(lot.qtyBought) - (soldByLot.get(lot.id) ?? 0));
       if (qtyAvailable <= 0) continue;
-
       options.push({
-        lotId,
-        sku: row[lotIdx.sku_proveedor] ?? "",
-        ownerId: row[lotIdx.id_owner] ?? "",
+        lotId: lot.id,
+        sku: lot.supplierSku ?? "",
+        ownerId: lot.ownerId,
         qtyAvailable,
-        unitCostGross: Number(row[lotIdx.costo_unitario_bruto] ?? 0),
-        description: row[lotIdx.descripcion] ?? "",
+        unitCostGross: toNumber(lot.unitCostGross),
+        description: lot.description,
       });
     }
 
-    options.sort((a, b) => a.lotId.localeCompare(b.lotId));
     return NextResponse.json({ ok: true, lots: options });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -54,12 +57,9 @@ export async function GET() {
   }
 }
 
-function indexMap(headers: string[]) {
-  const m: Record<string, number> = {};
-  headers.forEach((h, i) => {
-    m[h] = i;
-  });
-  return m;
+function toNumber(value: Prisma.Decimal | number | null | undefined) {
+  if (value == null) return 0;
+  return Number(value);
 }
 
 function round6(n: number) {

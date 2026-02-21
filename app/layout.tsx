@@ -14,6 +14,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <header className="header">
           <nav>
             <Link href="/dashboard">Dashboard</Link>
+            <Link href="/investors">Inversionistas</Link>
             <Link href="/inventario">Inventario</Link>
             <Link href="/purchases/new">Nueva compra</Link>
             <Link href="/sales/new">Nueva venta</Link>

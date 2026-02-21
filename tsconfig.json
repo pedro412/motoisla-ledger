@@ -15,6 +15,7 @@
     "incremental": true,
     "plugins": [{ "name": "next" }],
     "baseUrl": ".",
+    "types": ["vitest/globals", "node"],
     "paths": {
       "@/*": ["./*"]
     }

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
+import { OwnerType } from "@prisma/client";
 import { z } from "zod";
-import { getAllRows } from "@/lib/sheets";
 import { transferProfitToCapital } from "@/lib/capital";
+import { db } from "@/lib/db";
 
 const BodySchema = z.object({
   ownerId: z.string().min(1).optional(),
@@ -25,19 +26,10 @@ export async function POST(req: Request) {
 }
 
 async function resolveInvestorOwnerId() {
-  const investors = await getAllRows("Inversionistas");
-  const idx = indexMap(investors.headers);
-  return (
-    investors.rows.find((row) => String(row[idx.tipo] ?? "").toUpperCase() === "INVESTOR")?.[idx.id_inversionista] ??
-    process.env.DEFAULT_INVESTOR_ID ??
-    "INVESTOR_ID"
-  );
-}
-
-function indexMap(headers: string[]) {
-  const m: Record<string, number> = {};
-  headers.forEach((h, i) => {
-    m[h] = i;
+  const investor = await db.owner.findFirst({
+    where: { type: OwnerType.INVESTOR },
+    select: { id: true },
+    orderBy: { createdAt: "asc" },
   });
-  return m;
+  return investor?.id ?? "INVESTOR_ID";
 }

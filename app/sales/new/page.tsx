@@ -18,11 +18,14 @@ type LotOption = {
   unitCostGross: number;
   description: string;
 };
+type Investor = { id: string; nombre: string };
 
 const emptyLine: SaleLine = { lotId: "", sku: "", qty: 1, unitPriceGross: 0, discountGross: 0 };
 
 export default function NewSalePage() {
   const [lines, setLines] = useState<SaleLine[]>([{ ...emptyLine }]);
+  const [investors, setInvestors] = useState<Investor[]>([]);
+  const [ownerFilter, setOwnerFilter] = useState("");
   const [terminalPayment, setTerminalPayment] = useState(false);
   const [threeMonthsNoInterest, setThreeMonthsNoInterest] = useState(false);
   const [lots, setLots] = useState<LotOption[]>([]);
@@ -36,17 +39,21 @@ export default function NewSalePage() {
   useEffect(() => {
     let cancelled = false;
 
-    async function loadLots() {
+    async function loadInvestorsAndLots() {
       setLoadingLots(true);
       setLotsError("");
       try {
-        const res = await fetch("/api/lots", { cache: "no-store" });
-        const json = await res.json();
-        if (!res.ok || !json.ok) {
-          throw new Error(json.error || "No se pudieron cargar los lotes");
-        }
+        const [invRes, lotRes] = await Promise.all([
+          fetch("/api/investors", { cache: "no-store" }),
+          fetch("/api/lots", { cache: "no-store" }),
+        ]);
+        const invJson = await invRes.json();
+        const lotJson = await lotRes.json();
+        if (!invRes.ok || !invJson.ok) throw new Error(invJson.error || "No se pudieron cargar inversionistas");
+        if (!lotRes.ok || !lotJson.ok) throw new Error(lotJson.error || "No se pudieron cargar los lotes");
         if (!cancelled) {
-          setLots(json.lots);
+          setInvestors(invJson.investors ?? []);
+          setLots(lotJson.lots);
         }
       } catch (error) {
         if (!cancelled) {
@@ -60,11 +67,32 @@ export default function NewSalePage() {
       }
     }
 
-    loadLots();
+    loadInvestorsAndLots();
     return () => {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function reloadLotsByOwner() {
+      try {
+        const query = ownerFilter ? `?ownerId=${encodeURIComponent(ownerFilter)}` : "";
+        const res = await fetch(`/api/lots${query}`, { cache: "no-store" });
+        const json = await res.json();
+        if (!res.ok || !json.ok) throw new Error(json.error || "No se pudieron cargar los lotes");
+        if (!cancelled) setLots(json.lots);
+      } catch (error) {
+        if (!cancelled) {
+          setLotsError(error instanceof Error ? error.message : "Error cargando lotes");
+        }
+      }
+    }
+    reloadLotsByOwner();
+    return () => {
+      cancelled = true;
+    };
+  }, [ownerFilter]);
 
   function updateLine(index: number, key: keyof SaleLine, value: string) {
     setLines((prev) =>
@@ -173,6 +201,17 @@ export default function NewSalePage() {
       <form onSubmit={onSubmit}>
         <div className="grid">
           <label>Fecha<input name="date" type="date" required /></label>
+          <label>
+            Inversionista (filtro lotes)
+            <select value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)}>
+              <option value="">Todos</option>
+              {investors.map((inv) => (
+                <option key={inv.id} value={inv.id}>
+                  {inv.nombre} ({inv.id})
+                </option>
+              ))}
+            </select>
+          </label>
           <label>
             Canal
             <select name="channel" defaultValue="STORE">
