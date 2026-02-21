@@ -149,3 +149,44 @@ npm run dev
 ## Nota sobre Google Sheets
 
 Los endpoints `/api/sheets` y `/api/sheets/init` permanecen solo como deprecados/compatibilidad y ya no son backend operativo.
+
+## Runbook Railway (operación)
+
+### Variables requeridas
+
+- `DATABASE_URL`
+- `NEXTAUTH_URL`
+- `NEXTAUTH_SECRET`
+
+Opcionales de seed:
+
+- `SEED_ADMIN_USERNAME`
+- `SEED_ADMIN_PASSWORD`
+- `SEED_OPERATOR_USERNAME`
+- `SEED_OPERATOR_PASSWORD`
+- `SEED_INVESTOR_USERNAME`
+- `SEED_INVESTOR_PASSWORD`
+- `SEED_INVESTOR_ID`
+- `SEED_INVESTOR_NAME`
+- `SEED_MOTOISLA_ID`
+
+### Primer despliegue
+
+1. Configurar variables de entorno en Railway.
+2. Ejecutar sincronización inicial:
+   - `npx prisma db push`
+   - `npm run prisma:generate`
+3. Correr seed:
+   - `npm run prisma:seed`
+4. Validar:
+   - `GET /api/health/db`
+   - login en `/login`
+
+### Checklist antes de liberar cambios
+
+1. `npm run test:run`
+2. `npm run typecheck`
+3. `npm run build`
+4. Si cambió `prisma/schema.prisma`, ejecutar `npx prisma db push` en entorno destino.
+5. Verificar flujos mínimos:
+   - compra -> venta -> dashboard -> auditoría
