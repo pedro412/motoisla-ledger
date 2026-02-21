@@ -6,6 +6,7 @@ import { canAccessOwner, getSessionUser, isInvestor } from "@/lib/authz";
 
 type CapitalMovementView = {
   date: string;
+  registeredAt: string;
   type: string;
   amount: number;
   referenceId: string;
@@ -80,8 +81,8 @@ export default async function DashboardPage({
     }),
     db.capitalMovement.findMany({
       where: { ownerId: selectedOwnerId },
-      select: { type: true, amount: true, date: true, referenceId: true },
-      orderBy: { date: "asc" },
+      select: { id: true, type: true, amount: true, date: true, createdAt: true, referenceId: true },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     }),
   ]);
 
@@ -157,6 +158,7 @@ export default async function DashboardPage({
     running = round2(running + toNumber(m.amount));
     runningMoves.push({
       date: m.date.toISOString().slice(0, 10),
+      registeredAt: formatDateTime(m.createdAt),
       type: m.type,
       amount: toNumber(m.amount),
       referenceId: m.referenceId,
@@ -279,7 +281,7 @@ export default async function DashboardPage({
           <table className="table">
             <thead>
               <tr>
-                <th>Fecha</th>
+                <th>Fecha registro</th>
                 <th>Tipo</th>
                 <th>Monto</th>
                 <th>Cobro venta</th>
@@ -294,7 +296,7 @@ export default async function DashboardPage({
                 const margin = sale && sale.netRevenue > 0 ? (sale.profit / sale.netRevenue) * 100 : 0;
                 return (
                   <tr key={`${item.date}-${item.type}-${item.amount}`} className={`move-row ${movementRowClass(item.type)}`}>
-                    <td className="whitespace-nowrap">{item.date || "-"}</td>
+                    <td className="whitespace-nowrap">{item.registeredAt || "-"}</td>
                     <td>
                       <span className={`move-badge ${movementBadgeClass(item.type)}`}>{labelForMovementType(item.type)}</span>
                     </td>
@@ -380,4 +382,15 @@ function paymentLabelFromSale(terminalPayment: boolean, threeMonthsNoInterest: b
 
 function round2(n: number) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
+function formatDateTime(date: Date) {
+  return new Intl.DateTimeFormat("es-MX", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
 }
