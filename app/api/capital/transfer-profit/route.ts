@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
-import { OwnerType } from "@prisma/client";
+import { AuditEntity, OwnerType } from "@prisma/client";
 import { z } from "zod";
 import { transferProfitToCapital } from "@/lib/capital";
 import { db } from "@/lib/db";
+import { canAccessOwner, getSessionUser, isStaff } from "@/lib/authz";
+import { logAudit } from "@/lib/audit";
 
 const BodySchema = z.object({
   ownerId: z.string().min(1).optional(),
@@ -11,13 +13,33 @@ const BodySchema = z.object({
 
 export async function POST(req: Request) {
   try {
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json({ ok: false, error: "No autenticado" }, { status: 401 });
+
     const parsed = BodySchema.safeParse(await req.json().catch(() => ({})));
     if (!parsed.success) {
       return NextResponse.json({ ok: false, error: parsed.error.flatten() }, { status: 400 });
     }
 
-    const ownerId = parsed.data.ownerId ?? (await resolveInvestorOwnerId());
-    const result = await transferProfitToCapital(ownerId, parsed.data.amount);
+    const ownerId = parsed.data.ownerId ?? user.ownerId ?? (await resolveInvestorOwnerId());
+    if (!isStaff(user) && !canAccessOwner(user, ownerId)) {
+      return NextResponse.json({ ok: false, error: "No autorizado para este inversionista" }, { status: 403 });
+    }
+
+    const result = await transferProfitToCapital(ownerId, parsed.data.amount, user.id);
+    await logAudit({
+      actorUserId: user.id,
+      action: "capital.profit_transferred",
+      entity: AuditEntity.CAPITAL_MOVEMENT,
+      entityId: result.ownerId,
+      payload: {
+        ownerId: result.ownerId,
+        requestedAmount: parsed.data.amount ?? null,
+        transferredAmount: result.transferredAmount,
+        availableProfit: result.availableProfit,
+        currentCapitalAfter: result.currentCapitalAfter,
+      },
+    });
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";

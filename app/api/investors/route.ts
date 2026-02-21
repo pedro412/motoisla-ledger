@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
-import { OwnerType, Prisma } from "@prisma/client";
+import { AuditEntity, OwnerType, Prisma } from "@prisma/client";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { uid } from "@/lib/ids";
+import { getSessionUser, isAdmin, isInvestor } from "@/lib/authz";
+import { logAudit } from "@/lib/audit";
 
 const CreateInvestorSchema = z.object({
   id: z.string().min(1),
@@ -13,8 +15,14 @@ const CreateInvestorSchema = z.object({
 
 export async function GET() {
   try {
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json({ ok: false, error: "No autenticado" }, { status: 401 });
+
     const owners = await db.owner.findMany({
-      where: { type: OwnerType.INVESTOR },
+      where: {
+        type: OwnerType.INVESTOR,
+        ...(isInvestor(user) ? { id: user.ownerId ?? "__none__" } : {}),
+      },
       select: {
         id: true,
         name: true,
@@ -43,6 +51,10 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json({ ok: false, error: "No autenticado" }, { status: 401 });
+    if (!isAdmin(user)) return NextResponse.json({ ok: false, error: "Solo admin puede crear inversionistas" }, { status: 403 });
+
     const body = CreateInvestorSchema.parse(await req.json());
     const existing = await db.owner.findUnique({ where: { id: body.id }, select: { id: true } });
     if (existing) {
@@ -64,6 +76,8 @@ export async function POST(req: Request) {
           data: {
             id: uid("cap"),
             ownerId: body.id,
+            createdByUserId: user.id,
+            updatedByUserId: user.id,
             type: "CAPITAL_INICIAL",
             amount: dec(body.capitalInicial),
             referenceType: "ADJUSTMENT",
@@ -73,6 +87,22 @@ export async function POST(req: Request) {
           },
         });
       }
+
+      await logAudit(
+        {
+          actorUserId: user.id,
+          action: "owner.created",
+          entity: AuditEntity.OWNER,
+          entityId: body.id,
+          payload: {
+            ownerId: body.id,
+            nombre: body.nombre,
+            tipo: body.tipo,
+            capitalInicial: body.capitalInicial,
+          },
+        },
+        tx,
+      );
     });
 
     return NextResponse.json({ ok: true, ownerId: body.id });

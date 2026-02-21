@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
+import { AuditEntity, Prisma } from "@prisma/client";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { uid } from "@/lib/ids";
+import { getSessionUser, isAdmin } from "@/lib/authz";
+import { logAudit } from "@/lib/audit";
 
 const UpdateCapitalSchema = z.object({
   nuevoCapitalInicial: z.number().nonnegative(),
@@ -11,6 +13,10 @@ const UpdateCapitalSchema = z.object({
 
 export async function PATCH(req: Request, ctx: { params: { id: string } }) {
   try {
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json({ ok: false, error: "No autenticado" }, { status: 401 });
+    if (!isAdmin(user)) return NextResponse.json({ ok: false, error: "Solo admin puede ajustar capital inicial" }, { status: 403 });
+
     const body = UpdateCapitalSchema.parse(await req.json());
     const ownerId = ctx.params.id;
 
@@ -37,6 +43,8 @@ export async function PATCH(req: Request, ctx: { params: { id: string } }) {
           data: {
             id: uid("cap"),
             ownerId,
+            createdByUserId: user.id,
+            updatedByUserId: user.id,
             type: "AJUSTE_CAPITAL_INICIAL",
             amount: dec(delta),
             referenceType: "ADJUSTMENT",
@@ -46,6 +54,23 @@ export async function PATCH(req: Request, ctx: { params: { id: string } }) {
           },
         });
       }
+
+      await logAudit(
+        {
+          actorUserId: user.id,
+          action: "owner.initial_capital_updated",
+          entity: AuditEntity.OWNER,
+          entityId: ownerId,
+          payload: {
+            ownerId,
+            previousInitialCapital: current,
+            newInitialCapital: next,
+            delta,
+            motivo: body.motivo ?? null,
+          },
+        },
+        tx,
+      );
     });
 
     return NextResponse.json({ ok: true, ownerId, delta });

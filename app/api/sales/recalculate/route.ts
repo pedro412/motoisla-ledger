@@ -1,11 +1,17 @@
 import { NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
+import { AuditEntity, Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { uid } from "@/lib/ids";
 import { resolveProfitOwners } from "@/lib/capital";
+import { getSessionUser, isAdmin } from "@/lib/authz";
+import { logAudit } from "@/lib/audit";
 
 export async function POST() {
   try {
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json({ ok: false, error: "No autenticado" }, { status: 401 });
+    if (!isAdmin(user)) return NextResponse.json({ ok: false, error: "No autorizado" }, { status: 403 });
+
     const { motoIslaOwnerId } = await resolveProfitOwners();
     const [sales, lines] = await Promise.all([
       db.sale.findMany({
@@ -107,12 +113,27 @@ export async function POST() {
         await tx.sale.update({
           where: { id: saleId },
           data: {
+            updatedByUserId: user.id,
             commissionRate: dec6(totals.rate),
             terminalFeeTotal: dec(totals.fee),
             totalNetAfterFee: dec(totals.net),
           },
         });
       }
+
+      await logAudit(
+        {
+          actorUserId: user.id,
+          action: "sale.recalculated",
+          entity: AuditEntity.SALE,
+          entityId: "bulk",
+          payload: {
+            updatedLines: lineUpdates.length,
+            updatedSales: groupedBySale.size,
+          },
+        },
+        tx,
+      );
     });
 
     return NextResponse.json({ ok: true, updatedLines: lineUpdates.length });

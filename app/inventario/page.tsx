@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
+import { getSessionUser, isInvestor } from "@/lib/authz";
 
 type PurchaseGroup = {
   purchaseId: string;
@@ -21,12 +22,25 @@ type LotView = {
 };
 
 export default async function InventarioPage() {
+  const user = await getSessionUser();
+  if (!user) {
+    return (
+      <section>
+        <h1>Inventario por factura</h1>
+        <div className="card">No autenticado.</div>
+      </section>
+    );
+  }
+
+  const ownerFilter = isInvestor(user) ? user.ownerId ?? "__none__" : undefined;
   const [purchases, lots, soldRows] = await Promise.all([
     db.purchase.findMany({
+      where: ownerFilter ? { ownerId: ownerFilter } : undefined,
       select: { id: true, supplier: true, date: true, invoiceRef: true },
       orderBy: { date: "desc" },
     }),
     db.lot.findMany({
+      where: ownerFilter ? { ownerId: ownerFilter } : undefined,
       select: {
         id: true,
         purchaseId: true,

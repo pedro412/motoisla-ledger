@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
+import { getSessionUser, isInvestor } from "@/lib/authz";
 
 type LotOption = {
   lotId: string;
@@ -13,8 +14,17 @@ type LotOption = {
 
 export async function GET(req: Request) {
   try {
+    const user = await getSessionUser();
+    if (!user) {
+      return NextResponse.json({ ok: false, error: "No autenticado" }, { status: 401 });
+    }
+
     const { searchParams } = new URL(req.url);
-    const ownerId = searchParams.get("ownerId");
+    const requestedOwnerId = searchParams.get("ownerId");
+    const ownerId = isInvestor(user) ? user.ownerId ?? "" : requestedOwnerId;
+    if (isInvestor(user) && !ownerId) {
+      return NextResponse.json({ ok: false, error: "Usuario inversionista sin owner asignado" }, { status: 400 });
+    }
 
     const lots = await db.lot.findMany({
       where: ownerId ? { ownerId } : undefined,

@@ -57,6 +57,8 @@ model Owner {
 model CapitalMovement {
   id            String             @id
   ownerId       String
+  createdByUserId String?
+  updatedByUserId String?
   type          CapitalMovementType
   amount        Decimal            @db.Decimal(14, 2)
   referenceType String
@@ -73,6 +75,8 @@ model CapitalMovement {
 model Purchase {
   id           String         @id
   ownerId      String
+  createdByUserId String?
+  updatedByUserId String?
   date         DateTime
   supplier     String
   invoiceRef   String
@@ -135,6 +139,8 @@ model Lot {
 
 model Sale {
   id                    String      @id
+  createdByUserId       String?
+  updatedByUserId       String?
   date                  DateTime
   channel               String
   notes                 String?

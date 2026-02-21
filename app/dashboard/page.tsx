@@ -2,6 +2,7 @@ import Link from "next/link";
 import { OwnerType, Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { TransferProfitButton } from "@/app/dashboard/TransferProfitButton";
+import { canAccessOwner, getSessionUser, isInvestor } from "@/lib/authz";
 
 type CapitalMovementView = {
   date: string;
@@ -21,9 +22,29 @@ export default async function DashboardPage({
 }: {
   searchParams?: { ownerId?: string };
 }) {
+  const user = await getSessionUser();
+  if (!user) {
+    return (
+      <section>
+        <h1>Dashboard MotoIsla Ledger</h1>
+        <div className="card">No autenticado.</div>
+      </section>
+    );
+  }
+
   const owners = await db.owner.findMany({ orderBy: { createdAt: "asc" } });
   const investorOwners = owners.filter((o) => o.type === OwnerType.INVESTOR);
-  const selectedOwnerId = searchParams?.ownerId ?? investorOwners[0]?.id ?? owners[0]?.id ?? "";
+  const requestedOwnerId = searchParams?.ownerId ?? investorOwners[0]?.id ?? owners[0]?.id ?? "";
+  const selectedOwnerId = isInvestor(user) ? user.ownerId ?? "" : requestedOwnerId;
+
+  if (requestedOwnerId && !canAccessOwner(user, requestedOwnerId)) {
+    return (
+      <section>
+        <h1>Dashboard MotoIsla Ledger</h1>
+        <div className="card">No tienes acceso al inversionista solicitado.</div>
+      </section>
+    );
+  }
 
   if (!selectedOwnerId) {
     return (
@@ -142,18 +163,50 @@ export default async function DashboardPage({
       balanceAfter: running,
     });
   }
+  const movementRows = [...runningMoves].reverse();
+  const purchaseCount = purchases.length;
+  const saleCount = salesBySaleId.size;
+  const avgMargin = totalSales > 0 ? (totalProfit / totalSales) * 100 : 0;
 
   return (
-    <section>
-      <h1>Dashboard MotoIsla Ledger</h1>
+    <section className="space-y-4">
+      <div className="card bg-gradient-to-r from-sky-600 to-cyan-600 text-white">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="mb-1 text-white">Dashboard financiero</h1>
+            <p className="text-sm text-cyan-50">
+              Vista consolidada de capital, inventario, utilidad y auditoría para <strong>{owner.name}</strong>.
+            </p>
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-xs">
+            <div className="rounded-md bg-white/20 px-3 py-2">
+              <div className="opacity-85">Compras</div>
+              <div className="text-base font-semibold">{purchaseCount}</div>
+            </div>
+            <div className="rounded-md bg-white/20 px-3 py-2">
+              <div className="opacity-85">Ventas</div>
+              <div className="text-base font-semibold">{saleCount}</div>
+            </div>
+            <div className="rounded-md bg-white/20 px-3 py-2">
+              <div className="opacity-85">Margen prom.</div>
+              <div className="text-base font-semibold">{avgMargin.toFixed(2)}%</div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <div className="card">
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {investorOwners.map((o) => (
+        <h2>Selecciona inversionista</h2>
+        <div className="flex flex-wrap gap-2">
+          {(isInvestor(user) ? investorOwners.filter((o) => o.id === selectedOwnerId) : investorOwners).map((o) => (
             <Link
               key={o.id}
               href={`/dashboard?ownerId=${encodeURIComponent(o.id)}`}
-              className={o.id === selectedOwnerId ? "move-badge move-badge-transfer" : "move-badge move-badge-other"}
+              className={
+                o.id === selectedOwnerId
+                  ? "move-badge move-badge-transfer border border-sky-400 shadow-sm"
+                  : "move-badge move-badge-other border border-slate-200"
+              }
             >
               {o.name} ({o.id})
             </Link>
@@ -216,44 +269,53 @@ export default async function DashboardPage({
       </div>
 
       <div className="card">
-        <h2>Movimientos de capital del inversionista</h2>
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Fecha</th>
-              <th>Tipo</th>
-              <th>Monto</th>
-              <th>Cobro venta</th>
-              <th>Utilidad venta</th>
-              <th>Margen venta</th>
-              <th>Capital después</th>
-            </tr>
-          </thead>
-          <tbody>
-            {runningMoves.map((item) => {
-              const sale = salesBySaleId.get(item.referenceId);
-              const margin = sale && sale.netRevenue > 0 ? (sale.profit / sale.netRevenue) * 100 : 0;
-              return (
-                <tr key={`${item.date}-${item.type}-${item.amount}`} className={`move-row ${movementRowClass(item.type)}`}>
-                  <td>{item.date || "-"}</td>
-                  <td>
-                    <span className={`move-badge ${movementBadgeClass(item.type)}`}>{labelForMovementType(item.type)}</span>
-                  </td>
-                  <td>{item.amount >= 0 ? "+" : "-"}${formatMoney(Math.abs(item.amount))}</td>
-                  <td>{item.type === "VENTA_COSTO" ? (salePaymentBySaleId.get(item.referenceId) ?? "-") : "-"}</td>
-                  <td>{item.type === "VENTA_COSTO" ? `$${formatMoney(sale?.profit ?? 0)}` : "-"}</td>
-                  <td>{item.type === "VENTA_COSTO" ? `${margin.toFixed(2)}%` : "-"}</td>
-                  <td>${formatMoney(item.balanceAfter)}</td>
-                </tr>
-              );
-            })}
-            {runningMoves.length === 0 && (
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <h2 className="mb-0">Movimientos de capital</h2>
+          <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">
+            {movementRows.length} registros
+          </span>
+        </div>
+        <div className="overflow-x-auto rounded-lg border border-border">
+          <table className="table">
+            <thead>
               <tr>
-                <td colSpan={7}>Sin movimientos todavía.</td>
+                <th>Fecha</th>
+                <th>Tipo</th>
+                <th>Monto</th>
+                <th>Cobro venta</th>
+                <th>Utilidad venta</th>
+                <th>Margen venta</th>
+                <th>Capital después</th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {movementRows.map((item) => {
+                const sale = salesBySaleId.get(item.referenceId);
+                const margin = sale && sale.netRevenue > 0 ? (sale.profit / sale.netRevenue) * 100 : 0;
+                return (
+                  <tr key={`${item.date}-${item.type}-${item.amount}`} className={`move-row ${movementRowClass(item.type)}`}>
+                    <td className="whitespace-nowrap">{item.date || "-"}</td>
+                    <td>
+                      <span className={`move-badge ${movementBadgeClass(item.type)}`}>{labelForMovementType(item.type)}</span>
+                    </td>
+                    <td className={`text-right font-semibold ${item.amount >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                      {item.amount >= 0 ? "+" : "-"}${formatMoney(Math.abs(item.amount))}
+                    </td>
+                    <td>{item.type === "VENTA_COSTO" ? (salePaymentBySaleId.get(item.referenceId) ?? "-") : "-"}</td>
+                    <td className="text-right">{item.type === "VENTA_COSTO" ? `$${formatMoney(sale?.profit ?? 0)}` : "-"}</td>
+                    <td className="text-right">{item.type === "VENTA_COSTO" ? `${margin.toFixed(2)}%` : "-"}</td>
+                    <td className="text-right font-semibold">${formatMoney(item.balanceAfter)}</td>
+                  </tr>
+                );
+              })}
+              {movementRows.length === 0 && (
+                <tr>
+                  <td colSpan={7}>Sin movimientos todavía.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>
   );

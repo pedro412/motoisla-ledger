@@ -1,13 +1,19 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { Prisma } from "@prisma/client";
+import { AuditEntity, Prisma } from "@prisma/client";
 import { uid } from "@/lib/ids";
 import { db } from "@/lib/db";
 import { resolveProfitOwners } from "@/lib/capital";
 import { SaleCreateSchema } from "@/types/schemas";
+import { getSessionUser, isStaff } from "@/lib/authz";
+import { logAudit } from "@/lib/audit";
 
 export async function POST(req: Request) {
   try {
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json({ ok: false, error: "No autenticado" }, { status: 401 });
+    if (!isStaff(user)) return NextResponse.json({ ok: false, error: "No autorizado" }, { status: 403 });
+
     const body = SaleCreateSchema.parse(await req.json());
 
     const saleId = uid("sale");
@@ -81,6 +87,8 @@ export async function POST(req: Request) {
       await tx.sale.create({
         data: {
           id: saleId,
+          createdByUserId: user.id,
+          updatedByUserId: user.id,
           date: new Date(body.date),
           channel: body.channel,
           notes: body.notes ?? "",
@@ -151,6 +159,8 @@ export async function POST(req: Request) {
           data: {
             id: uid("cap"),
             ownerId,
+            createdByUserId: user.id,
+            updatedByUserId: user.id,
             type: "VENTA_COSTO",
             amount: dec(cogs),
             referenceType: "SALE",
@@ -159,6 +169,27 @@ export async function POST(req: Request) {
           },
         });
       }
+
+      await logAudit(
+        {
+          actorUserId: user.id,
+          action: "sale.created",
+          entity: AuditEntity.SALE,
+          entityId: saleId,
+          payload: {
+            ownerIds: Array.from(new Set(computedLines.map((l) => l.ownerId))),
+            date: body.date,
+            lineCount: computedLines.length,
+            totalGross: round2(totalGross),
+            terminalFeeTotal: round2(totalTerminalFee),
+            totalNetAfterFee: round2(totalNetAfterFee),
+            commissionRate: round4(commissionRate),
+            terminalPayment: body.terminalPayment,
+            threeMonthsNoInterest: body.threeMonthsNoInterest,
+          },
+        },
+        tx,
+      );
     });
 
     return NextResponse.json({

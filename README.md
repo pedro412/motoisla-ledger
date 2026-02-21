@@ -1,19 +1,58 @@
 # MotoIsla Ledger (Next.js + PostgreSQL + Prisma)
 
-Sistema de control financiero para compras, lotes, ventas, utilidad y capital por inversionista.
+Sistema financiero para tienda, con trazabilidad de compras, lotes, ventas, capital y utilidad por inversionista.
 
-## Stack actual
+## Estado actual del proyecto
+
+### Hecho
+
+- Migración de backend a PostgreSQL + Prisma (Google Sheets deprecado).
+- Flujo base operativo:
+  - alta inversionistas y capital inicial
+  - compra con validación de capital
+  - creación de lotes por compra/factura
+  - venta con validación de stock por lote
+  - comisiones terminal (0%, 2%, 5.58%)
+  - utilidad + capital + transferencia utilidad->capital
+  - recálculo y reconciliación
+- Multi-inversionista:
+  - dashboard por inversionista
+  - inventario por lotes/factura
+- Auth con `next-auth` (credentials).
+- RBAC inicial:
+  - `ADMIN`, `OPERADOR`, `INVERSIONISTA`
+  - aislamiento por `ownerId` para inversionistas
+- Auditoría:
+  - `AuditLog` con actor, acción, entidad y payload
+  - vista `/auditoria`
+- UI refresh:
+  - nuevo shell (sidebar + topbar)
+  - paleta y componentes base (Tailwind + utilidades UI)
+
+### En progreso
+
+- Consolidar pruebas de integración por rol y por flujo completo.
+
+### Backlog (priorizado)
+
+- Motor de reparto configurable por inversionista (actualmente está fijo 50/50 en venta y recalculate).
+- Auditoría avanzada (filtros por rango, exportación, búsqueda full-text).
+- Endurecer reglas de negocio opcionales (por ejemplo, no mezclar lotes de distintos inversionistas en una venta).
+
+## Stack
 
 - Next.js 14 (App Router + Route Handlers)
 - PostgreSQL
 - Prisma ORM
-- Zod para validación
-- Vitest para pruebas unitarias e integración de dominio
+- NextAuth (credentials)
+- Zod
+- Tailwind CSS
+- Vitest
 
 ## Configuración rápida
 
-1. Crea `.env.local` desde `.env.example`.
-2. Define al menos:
+1. Crear `.env.local` desde `.env.example`.
+2. Definir mínimo:
 
 ```bash
 DATABASE_URL=postgresql://USER:PASS@HOST:PORT/DBNAME?schema=public
@@ -21,7 +60,7 @@ NEXTAUTH_URL=http://localhost:3000
 NEXTAUTH_SECRET=pon_un_secret_largo
 ```
 
-3. Sincroniza schema en DB:
+3. Sincronizar schema y generar cliente:
 
 ```bash
 npx prisma db push
@@ -34,7 +73,7 @@ npm run prisma:generate
 npm run prisma:seed
 ```
 
-5. Levanta app:
+5. Levantar app:
 
 ```bash
 npm run dev
@@ -42,19 +81,34 @@ npm run dev
 
 ## Scripts
 
+- `npm run dev`
+- `npm run build`
+- `npm run typecheck`
+- `npm run test:run`
 - `npm run prisma:generate`
 - `npm run prisma:migrate`
 - `npm run prisma:studio`
 - `npm run prisma:seed`
-- `npm run test:run`
-- `npm run typecheck`
+
+## Rutas UI
+
+- `/dashboard`
+- `/inventario`
+- `/investors`
+- `/purchases/new`
+- `/sales/new`
+- `/auditoria`
+- `/login`
 
 ## Endpoints principales
 
 ### Salud
 
 - `GET /api/health/db`
-  - healthcheck PostgreSQL.
+
+### Auth
+
+- `GET|POST /api/auth/[...nextauth]`
 
 ### Inversionistas
 
@@ -62,54 +116,28 @@ npm run dev
 - `POST /api/investors`
 - `PATCH /api/investors/:id/capital`
 
-### Compras
+### Compras / lotes / ventas
 
 - `POST /api/purchases`
-  - valida capital del inversionista
-  - parsea factura
-  - crea compra, líneas, lotes y movimiento de capital `COMPRA`.
-
-### Ventas
-
-- `POST /api/sales`
-  - valida stock por lote
-  - calcula comisión terminal (0%, 2%, 5.58%)
-  - crea venta, líneas y reparto utilidad
-  - registra `VENTA_COSTO` en capital.
-
-- `POST /api/sales/recalculate`
-  - recálculo de utilidad/comisiones históricas sobre DB.
-
 - `GET /api/lots?ownerId=<id>`
-  - lotes con stock disponible, opcionalmente filtrados por inversionista.
+- `POST /api/sales`
+- `POST /api/sales/recalculate`
 
 ### Capital
 
 - `POST /api/capital/transfer-profit`
-  - transfiere utilidad acumulada a capital (total o parcial).
-
 - `POST /api/capital/reconcile`
-  - reconstruye movimientos de capital desde ledger.
 
-## UI
+## Seguridad y permisos
 
-- `/dashboard` (filtro por inversionista con `?ownerId=`).
-- `/investors` (alta/ajuste de inversionistas).
-- `/purchases/new`
-- `/sales/new`
-- `/inventario`
-
-## Pruebas
-
-- Unitarias: `tests/unit/ledgerMath.test.ts`
-- Integración de flujo financiero: `tests/integration/ledgerFlow.test.ts`
-
-Ejecutar:
-
-```bash
-npm run test:run
-```
+- `ADMIN`
+  - acceso total.
+- `OPERADOR`
+  - operación diaria (compras/ventas), sin acciones de admin sensibles.
+- `INVERSIONISTA`
+  - acceso restringido a su propio `ownerId`.
+  - no puede operar compras/ventas de otros ni gestionar inversionistas.
 
 ## Nota sobre Google Sheets
 
-Los endpoints `/api/sheets` y `/api/sheets/init` quedaron como **deprecados** y ya no son el backend operativo.
+Los endpoints `/api/sheets` y `/api/sheets/init` permanecen solo como deprecados/compatibilidad y ya no son backend operativo.

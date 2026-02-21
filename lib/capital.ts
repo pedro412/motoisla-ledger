@@ -11,7 +11,7 @@ type ProfitTransferResult = {
 
 type MovementKind = CapitalMovementType | "UTILIDAD_A_CAPITAL";
 
-export async function reconcileCapitalMovementsFromLedger() {
+export async function reconcileCapitalMovementsFromLedger(actorUserId?: string) {
   return db.$transaction(async (tx) => {
     await tx.capitalMovement.deleteMany({
       where: { type: { in: [CapitalMovementType.COMPRA, CapitalMovementType.VENTA_COSTO] } },
@@ -26,6 +26,8 @@ export async function reconcileCapitalMovementsFromLedger() {
         data: purchases.map((p) => ({
           id: uid("cap"),
           ownerId: p.ownerId,
+          createdByUserId: actorUserId ?? null,
+          updatedByUserId: actorUserId ?? null,
           type: CapitalMovementType.COMPRA,
           amount: new Prisma.Decimal(0).sub(p.totalGross),
           referenceType: "PURCHASE",
@@ -53,6 +55,8 @@ export async function reconcileCapitalMovementsFromLedger() {
           .map((g) => ({
             id: uid("cap"),
             ownerId: ownerByLot.get(g.lotId) as string,
+            createdByUserId: actorUserId ?? null,
+            updatedByUserId: actorUserId ?? null,
             type: CapitalMovementType.VENTA_COSTO,
             amount: g._sum.cogsGross ?? new Prisma.Decimal(0),
             referenceType: "SALE",
@@ -99,6 +103,7 @@ export async function getOwnerCapitalSnapshot(ownerId: string) {
 
 export async function appendCapitalMovement(params: {
   ownerId: string;
+  actorUserId?: string;
   type: MovementKind;
   amount: number;
   referenceId: string;
@@ -112,6 +117,8 @@ export async function appendCapitalMovement(params: {
     data: {
       id: uid("cap"),
       ownerId: params.ownerId,
+      createdByUserId: params.actorUserId ?? null,
+      updatedByUserId: params.actorUserId ?? null,
       type,
       amount: new Prisma.Decimal(round2(params.amount)),
       referenceType,
@@ -122,7 +129,11 @@ export async function appendCapitalMovement(params: {
   });
 }
 
-export async function transferProfitToCapital(ownerId: string, requestedAmount?: number): Promise<ProfitTransferResult> {
+export async function transferProfitToCapital(
+  ownerId: string,
+  requestedAmount?: number,
+  actorUserId?: string,
+): Promise<ProfitTransferResult> {
   const [capital, accruedProfit, transferredProfit] = await Promise.all([
     getOwnerCapitalSnapshot(ownerId),
     getOwnerAccruedProfit(ownerId),
@@ -144,6 +155,7 @@ export async function transferProfitToCapital(ownerId: string, requestedAmount?:
 
   await appendCapitalMovement({
     ownerId,
+    actorUserId,
     type: "UTILIDAD_A_CAPITAL",
     amount,
     referenceId: uid("trf"),

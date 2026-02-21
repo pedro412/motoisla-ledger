@@ -1,15 +1,21 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { Prisma } from "@prisma/client";
+import { AuditEntity, Prisma } from "@prisma/client";
 import { uid } from "@/lib/ids";
 import { parseLS2InvoiceText } from "@/lib/parse/ls2Invoice";
 import { getOwnerCapitalSnapshot } from "@/lib/capital";
 import { allocateTaxByLines } from "@/lib/tax";
 import { PurchaseImportSchema } from "@/types/schemas";
 import { db } from "@/lib/db";
+import { getSessionUser, isStaff } from "@/lib/authz";
+import { logAudit } from "@/lib/audit";
 
 export async function POST(req: Request) {
   try {
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json({ ok: false, error: "No autenticado" }, { status: 401 });
+    if (!isStaff(user)) return NextResponse.json({ ok: false, error: "No autorizado" }, { status: 403 });
+
     const body = PurchaseImportSchema.parse(await req.json());
 
     const purchaseId = uid("pur");
@@ -34,6 +40,8 @@ export async function POST(req: Request) {
         data: {
           id: purchaseId,
           ownerId: body.defaultOwnerId,
+          createdByUserId: user.id,
+          updatedByUserId: user.id,
           date: new Date(body.date),
           supplier: body.supplier,
           invoiceRef: body.invoiceRef,
@@ -96,6 +104,8 @@ export async function POST(req: Request) {
         data: {
           id: uid("cap"),
           ownerId: body.defaultOwnerId,
+          createdByUserId: user.id,
+          updatedByUserId: user.id,
           type: "COMPRA",
           amount: dec(-body.totalGross),
           referenceType: "PURCHASE",
@@ -104,6 +114,23 @@ export async function POST(req: Request) {
           notes: rawDocId,
         },
       });
+
+      await logAudit(
+        {
+          actorUserId: user.id,
+          action: "purchase.created",
+          entity: AuditEntity.PURCHASE,
+          entityId: purchaseId,
+          payload: {
+            ownerId: body.defaultOwnerId,
+            supplier: body.supplier,
+            date: body.date,
+            totalGross: round2(body.totalGross),
+            lineCount: parsed.length,
+          },
+        },
+        tx,
+      );
     });
 
     return NextResponse.json({ ok: true, purchaseId });
