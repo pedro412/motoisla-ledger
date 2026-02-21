@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { getSessionUser, isInvestor } from "@/lib/authz";
+import { resolveOwnerScope } from "@/lib/ownerScope";
 
 type LotOption = {
   lotId: string;
@@ -21,7 +22,7 @@ export async function GET(req: Request) {
 
     const { searchParams } = new URL(req.url);
     const requestedOwnerId = searchParams.get("ownerId");
-    const ownerId = isInvestor(user) ? user.ownerId ?? "" : requestedOwnerId;
+    const ownerId = resolveOwnerScope(user, requestedOwnerId);
     if (isInvestor(user) && !ownerId) {
       return NextResponse.json({ ok: false, error: "Usuario inversionista sin owner asignado" }, { status: 400 });
     }
