@@ -158,6 +158,7 @@ npm run dev
   - `tests/integration/ledgerFlow.test.ts` (flujo financiero de dominio)
   - `tests/integration/apiAuthz.test.ts` (401/403 por endpoint)
   - `tests/integration/roleFlows.test.ts` (scoping por rol en endpoints)
+  - `tests/integration/operationalFlow.test.ts` (compra/venta exitosas con auditoría y movimientos)
 
 ## Nota sobre Google Sheets
 
