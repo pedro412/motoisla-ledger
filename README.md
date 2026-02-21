@@ -31,7 +31,7 @@ Sistema financiero para tienda, con trazabilidad de compras, lotes, ventas, capi
 
 ### En progreso
 
-- Consolidar pruebas de integración por rol y por flujo completo.
+- Consolidar pruebas de integración por rol y por flujo completo (parcialmente cubierto).
 
 ### Backlog (priorizado)
 
@@ -145,6 +145,19 @@ npm run dev
 - `INVERSIONISTA`
   - acceso restringido a su propio `ownerId`.
   - no puede operar compras/ventas de otros ni gestionar inversionistas.
+
+## Pruebas automatizadas (estado)
+
+- Unitarias:
+  - `tests/unit/ledgerMath.test.ts`
+  - `tests/unit/authz.test.ts`
+  - `tests/unit/rbacRoutes.test.ts`
+  - `tests/unit/ownerScope.test.ts`
+  - `tests/unit/audit.test.ts`
+- Integración:
+  - `tests/integration/ledgerFlow.test.ts` (flujo financiero de dominio)
+  - `tests/integration/apiAuthz.test.ts` (401/403 por endpoint)
+  - `tests/integration/roleFlows.test.ts` (scoping por rol en endpoints)
 
 ## Nota sobre Google Sheets
 
