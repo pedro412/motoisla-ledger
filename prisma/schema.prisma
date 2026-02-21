@@ -22,8 +22,19 @@ enum CapitalMovementType {
   CAPITAL_INICIAL
   AJUSTE_CAPITAL_INICIAL
   COMPRA
+  REVERSA_COMPRA
   VENTA_COSTO
   UTILIDAD_A_CAPITAL
+}
+
+enum PurchaseStatus {
+  ACTIVE
+  CANCELLED
+}
+
+enum LotStatus {
+  ACTIVE
+  CANCELLED
 }
 
 enum ProfitSplitStatus {
@@ -77,6 +88,10 @@ model Purchase {
   ownerId      String
   createdByUserId String?
   updatedByUserId String?
+  status       PurchaseStatus @default(ACTIVE)
+  cancelledAt  DateTime?
+  cancelledByUserId String?
+  cancelReason String?
   date         DateTime
   supplier     String
   invoiceRef   String
@@ -122,6 +137,7 @@ model Lot {
   purchaseId       String
   purchaseLineId   String
   ownerId          String
+  status           LotStatus    @default(ACTIVE)
   supplierSku      String
   internalSku      String?
   description      String

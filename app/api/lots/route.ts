@@ -28,7 +28,7 @@ export async function GET(req: Request) {
     }
 
     const lots = await db.lot.findMany({
-      where: ownerId ? { ownerId } : undefined,
+      where: ownerId ? { ownerId, status: "ACTIVE" } : { status: "ACTIVE" },
       select: {
         id: true,
         ownerId: true,

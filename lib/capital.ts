@@ -14,16 +14,19 @@ type MovementKind = CapitalMovementType | "UTILIDAD_A_CAPITAL";
 export async function reconcileCapitalMovementsFromLedger(actorUserId?: string) {
   return db.$transaction(async (tx) => {
     await tx.capitalMovement.deleteMany({
-      where: { type: { in: [CapitalMovementType.COMPRA, CapitalMovementType.VENTA_COSTO] } },
+      where: { type: { in: [CapitalMovementType.COMPRA, CapitalMovementType.REVERSA_COMPRA, CapitalMovementType.VENTA_COSTO] } },
     });
 
     const purchases = await tx.purchase.findMany({
-      select: { id: true, ownerId: true, totalGross: true, date: true },
+      select: { id: true, ownerId: true, totalGross: true, date: true, status: true, cancelledAt: true },
     });
 
-    if (purchases.length > 0) {
+    const activePurchases = purchases.filter((p) => p.status === "ACTIVE");
+    const cancelledPurchases = purchases.filter((p) => p.status === "CANCELLED");
+
+    if (activePurchases.length > 0) {
       await tx.capitalMovement.createMany({
-        data: purchases.map((p) => ({
+        data: activePurchases.map((p) => ({
           id: uid("cap"),
           ownerId: p.ownerId,
           createdByUserId: actorUserId ?? null,
@@ -33,6 +36,23 @@ export async function reconcileCapitalMovementsFromLedger(actorUserId?: string) 
           referenceType: "PURCHASE",
           referenceId: p.id,
           date: p.date,
+          notes: "reconcile",
+        })),
+      });
+    }
+
+    if (cancelledPurchases.length > 0) {
+      await tx.capitalMovement.createMany({
+        data: cancelledPurchases.map((p) => ({
+          id: uid("cap"),
+          ownerId: p.ownerId,
+          createdByUserId: actorUserId ?? null,
+          updatedByUserId: actorUserId ?? null,
+          type: CapitalMovementType.REVERSA_COMPRA,
+          amount: p.totalGross,
+          referenceType: "PURCHASE",
+          referenceId: p.id,
+          date: p.cancelledAt ?? new Date(),
           notes: "reconcile",
         })),
       });
@@ -69,7 +89,8 @@ export async function reconcileCapitalMovementsFromLedger(actorUserId?: string) 
 
     return {
       total: purchases.length + grouped.length,
-      compras: purchases.length,
+      compras: activePurchases.length,
+      reversasCompra: cancelledPurchases.length,
       ventasCosto: grouped.length,
     };
   });

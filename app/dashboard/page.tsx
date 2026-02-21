@@ -67,11 +67,11 @@ export default async function DashboardPage({
 
   const [purchases, lots, profitSplits, movements] = await Promise.all([
     db.purchase.findMany({
-      where: { ownerId: selectedOwnerId },
+      where: { ownerId: selectedOwnerId, status: "ACTIVE" },
       select: { totalGross: true },
     }),
     db.lot.findMany({
-      where: { ownerId: selectedOwnerId },
+      where: { ownerId: selectedOwnerId, status: "ACTIVE" },
       select: { id: true, qtyBought: true, unitCostGross: true },
     }),
     db.profitSplit.findMany({
@@ -333,6 +333,7 @@ function toNumber(value: Prisma.Decimal | number | null | undefined) {
 function labelForMovementType(type: string) {
   const normalized = String(type || "").toUpperCase();
   if (normalized === "COMPRA") return "Compra (sale capital)";
+  if (normalized === "REVERSA_COMPRA") return "Cancelación compra (regresa capital)";
   if (normalized === "VENTA_COSTO") return "Venta (regresa costo a capital)";
   if (normalized === "UTILIDAD_A_CAPITAL") return "Transferencia de utilidad a capital";
   if (normalized === "CAPITAL_INICIAL") return "Capital inicial";
@@ -344,7 +345,12 @@ function movementBadgeClass(type: string) {
   const normalized = String(type || "").toUpperCase();
   if (normalized === "COMPRA") return "move-badge-compra";
   if (normalized === "VENTA_COSTO") return "move-badge-venta";
-  if (normalized === "UTILIDAD_A_CAPITAL" || normalized === "CAPITAL_INICIAL" || normalized === "AJUSTE_CAPITAL_INICIAL") {
+  if (
+    normalized === "UTILIDAD_A_CAPITAL" ||
+    normalized === "CAPITAL_INICIAL" ||
+    normalized === "AJUSTE_CAPITAL_INICIAL" ||
+    normalized === "REVERSA_COMPRA"
+  ) {
     return "move-badge-transfer";
   }
   return "move-badge-other";
@@ -354,7 +360,12 @@ function movementRowClass(type: string) {
   const normalized = String(type || "").toUpperCase();
   if (normalized === "COMPRA") return "move-row-compra";
   if (normalized === "VENTA_COSTO") return "move-row-venta";
-  if (normalized === "UTILIDAD_A_CAPITAL" || normalized === "CAPITAL_INICIAL" || normalized === "AJUSTE_CAPITAL_INICIAL") {
+  if (
+    normalized === "UTILIDAD_A_CAPITAL" ||
+    normalized === "CAPITAL_INICIAL" ||
+    normalized === "AJUSTE_CAPITAL_INICIAL" ||
+    normalized === "REVERSA_COMPRA"
+  ) {
     return "move-row-transfer";
   }
   return "";

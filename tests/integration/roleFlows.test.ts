@@ -107,7 +107,7 @@ describe("role flows integration", () => {
     expect(json.lots[0].ownerId).toBe("inv_1");
     expect(dbMocks.lot.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { ownerId: "inv_1" },
+        where: { ownerId: "inv_1", status: "ACTIVE" },
       }),
     );
   });

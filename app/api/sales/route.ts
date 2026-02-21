@@ -28,7 +28,7 @@ export async function POST(req: Request) {
     const lotIds = Array.from(requestedByLot.keys());
     const [lots, soldRows] = await Promise.all([
       db.lot.findMany({
-        where: { id: { in: lotIds } },
+        where: { id: { in: lotIds }, status: "ACTIVE" },
         select: { id: true, ownerId: true, unitCostGross: true, supplierSku: true, qtyBought: true },
       }),
       db.saleLine.groupBy({

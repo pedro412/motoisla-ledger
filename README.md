@@ -10,6 +10,7 @@ Sistema financiero para tienda, con trazabilidad de compras, lotes, ventas, capi
 - Flujo base operativo:
   - alta inversionistas y capital inicial
   - compra con validación de capital
+  - cancelación de compra (auditable, con reversa de capital y bloqueo por ventas existentes)
   - creación de lotes por compra/factura
   - venta con validación de stock por lote
   - comisiones terminal (0%, 2%, 5.58%)
@@ -127,6 +128,7 @@ npm run dev
 ### Compras / lotes / ventas
 
 - `POST /api/purchases`
+- `POST /api/purchases/:id/cancel`
 - `GET /api/lots?ownerId=<id>`
 - `POST /api/sales`
 - `POST /api/sales/recalculate`
