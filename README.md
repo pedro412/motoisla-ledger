@@ -67,11 +67,19 @@ npx prisma db push
 npm run prisma:generate
 ```
 
-4. Seed inicial (owner inversionista, owner motoisla, admin):
+4. Seed inicial (owners + usuarios por rol):
 
 ```bash
 npm run prisma:seed
 ```
+
+Esto crea por defecto:
+
+- owner inversionista `inv_lic`
+- owner `motoisla`
+- usuario `admin` (rol `ADMIN`)
+- usuario `operador` (rol `OPERADOR`)
+- usuario `inversionista` (rol `INVERSIONISTA`, ligado a `inv_lic`)
 
 5. Levantar app:
 
