@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
+import { isBlockedPathForInvestor } from "@/lib/rbacRoutes";
 
 function isApiPath(pathname: string) {
   return pathname.startsWith("/api/");
@@ -11,14 +12,7 @@ export async function middleware(req: NextRequest) {
   if (token) {
     const role = String(token.role ?? "");
     const pathname = req.nextUrl.pathname;
-    const blockedForInvestor =
-      pathname.startsWith("/purchases") ||
-      pathname.startsWith("/sales") ||
-      pathname.startsWith("/investors") ||
-      pathname.startsWith("/api/purchases") ||
-      pathname.startsWith("/api/sales") ||
-      pathname.startsWith("/api/investors") ||
-      pathname.startsWith("/api/capital/reconcile");
+    const blockedForInvestor = isBlockedPathForInvestor(pathname);
 
     if (role === "INVERSIONISTA" && blockedForInvestor) {
       if (isApiPath(pathname)) {
