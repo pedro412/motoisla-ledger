@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { MoneyInput } from "@/components/ui/money-input";
 
 type Investor = {
   id: string;
@@ -15,6 +16,7 @@ export default function InvestorsPage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState("");
   const [capitalDrafts, setCapitalDrafts] = useState<Record<string, string>>({});
+  const [newCapitalInicial, setNewCapitalInicial] = useState("0.00");
 
   async function loadInvestors() {
     setLoading(true);
@@ -54,7 +56,7 @@ export default function InvestorsPage() {
     const payload = {
       nombre: String(form.get("nombre") || "").trim(),
       tipo: String(form.get("tipo") || "INVESTOR"),
-      capitalInicial: Number(form.get("capitalInicial") || 0),
+      capitalInicial: Number(newCapitalInicial || 0),
     };
 
     const res = await fetch("/api/investors", {
@@ -66,6 +68,7 @@ export default function InvestorsPage() {
     setResult(JSON.stringify(json, null, 2));
     if (res.ok && json.ok) {
       (event.currentTarget as HTMLFormElement).reset();
+      setNewCapitalInicial("0.00");
       await loadInvestors();
     }
   }
@@ -99,7 +102,10 @@ export default function InvestorsPage() {
                 <option value="MOTOISLA">MOTOISLA</option>
               </select>
             </label>
-            <label>Capital inicial<input name="capitalInicial" type="number" step="0.01" defaultValue="0" required /></label>
+            <label>
+              Capital inicial
+              <MoneyInput name="capitalInicial" value={newCapitalInicial} onValueChange={setNewCapitalInicial} required />
+            </label>
           </div>
           <button type="submit">Crear inversionista</button>
         </form>
@@ -126,14 +132,12 @@ export default function InvestorsPage() {
                   <td>{inv.nombre}</td>
                   <td>{inv.tipo}</td>
                   <td>
-                    <input
-                      type="number"
-                      step="0.01"
+                    <MoneyInput
                       value={capitalDrafts[inv.id] ?? String(inv.capitalInicial)}
-                      onChange={(e) =>
+                      onValueChange={(next) =>
                         setCapitalDrafts((prev) => ({
                           ...prev,
-                          [inv.id]: e.target.value,
+                          [inv.id]: next,
                         }))
                       }
                     />

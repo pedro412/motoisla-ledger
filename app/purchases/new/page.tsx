@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { parseInvoiceByFormat, type InvoiceFormat } from "@/lib/parse/invoiceParser";
 import type { ParsedLine } from "@/lib/parse/ls2Invoice";
+import { MoneyInput } from "@/components/ui/money-input";
 
 type Investor = {
   id: string;
@@ -149,40 +150,34 @@ export default function NewPurchasePage() {
           <label>Referencia factura<input name="invoiceRef" /></label>
           <label>
             Subtotal neto
-            <input
+            <MoneyInput
               name="subtotalNet"
-              type="number"
-              step="0.01"
               required
               value={subtotalNet}
-              onChange={(e) => setSubtotalNet(e.target.value)}
+              onValueChange={setSubtotalNet}
             />
           </label>
           <label>
             IVA total
-            <input
+            <MoneyInput
               name="taxTotal"
-              type="number"
-              step="0.01"
               required
               value={taxTotal}
-              onChange={(e) => {
+              onValueChange={(next) => {
                 setTaxTouched(true);
-                setTaxTotal(e.target.value);
+                setTaxTotal(next);
               }}
             />
           </label>
           <label>
             Total bruto
-            <input
+            <MoneyInput
               name="totalGross"
-              type="number"
-              step="0.01"
               required
               value={totalGross}
-              onChange={(e) => {
+              onValueChange={(next) => {
                 setTotalTouched(true);
-                setTotalGross(e.target.value);
+                setTotalGross(next);
               }}
             />
           </label>
