@@ -1,7 +1,8 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { parseLS2InvoiceText, type ParsedLine } from "@/lib/parse/ls2Invoice";
+import { parseInvoiceByFormat, type InvoiceFormat } from "@/lib/parse/invoiceParser";
+import type { ParsedLine } from "@/lib/parse/ls2Invoice";
 
 type Investor = {
   id: string;
@@ -11,6 +12,7 @@ type Investor = {
 export default function NewPurchasePage() {
   const [investors, setInvestors] = useState<Investor[]>([]);
   const [selectedOwnerId, setSelectedOwnerId] = useState("");
+  const [invoiceFormat, setInvoiceFormat] = useState<InvoiceFormat>("LS2");
   const [rawText, setRawText] = useState("");
   const [subtotalNet, setSubtotalNet] = useState("");
   const [taxRate, setTaxRate] = useState("0.16");
@@ -30,14 +32,14 @@ export default function NewPurchasePage() {
       return [];
     }
     try {
-      const lines = parseLS2InvoiceText(raw);
+      const lines = parseInvoiceByFormat(raw, invoiceFormat);
       setLinePreviewError("");
       return lines;
     } catch (error) {
       setLinePreviewError(error instanceof Error ? error.message : "No se pudo parsear el texto");
       return [];
     }
-  }, [rawText]);
+  }, [rawText, invoiceFormat]);
 
   const previewSubtotal = useMemo(
     () => round2(previewLines.reduce((acc, line) => acc + Number(line.lineTotalNet || 0), 0)),
@@ -108,6 +110,7 @@ export default function NewPurchasePage() {
     const form = new FormData(event.currentTarget);
     const payload = {
       supplier: String(form.get("supplier") || ""),
+      invoiceFormat,
       date: String(form.get("date") || ""),
       invoiceRef: String(form.get("invoiceRef") || ""),
       subtotalNet: toNumber(subtotalNet),
@@ -135,6 +138,13 @@ export default function NewPurchasePage() {
       <form onSubmit={onSubmit}>
         <div className="grid">
           <label>Proveedor<input name="supplier" required /></label>
+          <label>
+            Formato factura
+            <select value={invoiceFormat} onChange={(e) => setInvoiceFormat(e.target.value as InvoiceFormat)}>
+              <option value="LS2">LS2</option>
+              <option value="EDGE">EDGE</option>
+            </select>
+          </label>
           <label>Fecha<input name="date" type="date" required /></label>
           <label>Referencia factura<input name="invoiceRef" /></label>
           <label>
@@ -209,7 +219,7 @@ export default function NewPurchasePage() {
           )}
         </div>
         <label>
-          Texto de factura LS2
+          Texto de factura ({invoiceFormat})
           <textarea
             name="rawText"
             rows={12}

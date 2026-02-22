@@ -15,7 +15,7 @@ const capitalMocks = vi.hoisted(() => ({
 }));
 
 const parseMocks = vi.hoisted(() => ({
-  parseLS2InvoiceText: vi.fn(),
+  parseInvoiceByFormat: vi.fn(),
 }));
 
 const taxMocks = vi.hoisted(() => ({
@@ -29,7 +29,7 @@ const auditMocks = vi.hoisted(() => ({
 vi.mock("@/lib/authz", () => authzMocks);
 vi.mock("@/lib/db", () => ({ db: dbMocks }));
 vi.mock("@/lib/capital", () => capitalMocks);
-vi.mock("@/lib/parse/ls2Invoice", () => parseMocks);
+vi.mock("@/lib/parse/invoiceParser", () => parseMocks);
 vi.mock("@/lib/tax", () => taxMocks);
 vi.mock("@/lib/audit", () => auditMocks);
 
@@ -58,7 +58,7 @@ describe("operational flow integration", () => {
 
   it("purchase flow persists purchase, lot, capital movement and audit", async () => {
     capitalMocks.getOwnerCapitalSnapshot.mockResolvedValue({ currentCapital: 50000 });
-    parseMocks.parseLS2InvoiceText.mockReturnValue([
+    parseMocks.parseInvoiceByFormat.mockReturnValue([
       {
         supplierSku: "SKU-1",
         unit: "PZA",
@@ -75,6 +75,7 @@ describe("operational flow integration", () => {
       method: "POST",
       body: JSON.stringify({
         supplier: "Proveedor X",
+        invoiceFormat: "LS2",
         date: "2026-02-01",
         invoiceRef: "FAC-123",
         subtotalNet: 100,

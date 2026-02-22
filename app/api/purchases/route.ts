@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { AuditEntity, Prisma } from "@prisma/client";
 import { uid } from "@/lib/ids";
-import { parseLS2InvoiceText } from "@/lib/parse/ls2Invoice";
+import { parseInvoiceByFormat } from "@/lib/parse/invoiceParser";
 import { getOwnerCapitalSnapshot } from "@/lib/capital";
 import { allocateTaxByLines } from "@/lib/tax";
 import { PurchaseImportSchema } from "@/types/schemas";
@@ -28,7 +28,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const parsed = parseLS2InvoiceText(body.rawText);
+    const parsed = parseInvoiceByFormat(body.rawText, body.invoiceFormat);
     if (!parsed.length) {
       throw new Error("Factura inválida o formato no soportado: no se detectaron líneas de productos.");
     }
