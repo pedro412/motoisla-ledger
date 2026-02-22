@@ -52,7 +52,6 @@ export default function InvestorsPage() {
     const form = new FormData(event.currentTarget);
 
     const payload = {
-      id: String(form.get("id") || "").trim(),
       nombre: String(form.get("nombre") || "").trim(),
       tipo: String(form.get("tipo") || "INVESTOR"),
       capitalInicial: Number(form.get("capitalInicial") || 0),
@@ -92,7 +91,6 @@ export default function InvestorsPage() {
         <h1>Inversionistas</h1>
         <form onSubmit={onCreate}>
           <div className="grid">
-            <label>ID<input name="id" required placeholder="inv_lic" /></label>
             <label>Nombre<input name="nombre" required placeholder="Lic" /></label>
             <label>
               Tipo

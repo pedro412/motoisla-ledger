@@ -7,7 +7,7 @@ import { getSessionUser, isAdmin, isInvestor } from "@/lib/authz";
 import { logAudit } from "@/lib/audit";
 
 const CreateInvestorSchema = z.object({
-  id: z.string().min(1),
+  id: z.string().min(1).optional(),
   nombre: z.string().min(1),
   tipo: z.enum(["INVESTOR", "MOTOISLA"]).default("INVESTOR"),
   capitalInicial: z.number().nonnegative().default(0),
@@ -56,15 +56,20 @@ export async function POST(req: Request) {
     if (!isAdmin(user)) return NextResponse.json({ ok: false, error: "Solo admin puede crear inversionistas" }, { status: 403 });
 
     const body = CreateInvestorSchema.parse(await req.json());
-    const existing = await db.owner.findUnique({ where: { id: body.id }, select: { id: true } });
-    if (existing) {
-      return NextResponse.json({ ok: false, error: `Ya existe owner ${body.id}` }, { status: 400 });
+    let ownerId = body.id?.trim();
+    if (ownerId) {
+      const existing = await db.owner.findUnique({ where: { id: ownerId }, select: { id: true } });
+      if (existing) {
+        return NextResponse.json({ ok: false, error: `Ya existe owner ${ownerId}` }, { status: 400 });
+      }
+    } else {
+      ownerId = await generateOwnerId();
     }
 
     await db.$transaction(async (tx) => {
       await tx.owner.create({
         data: {
-          id: body.id,
+          id: ownerId,
           name: body.nombre,
           type: body.tipo,
           initialCapital: dec(body.capitalInicial),
@@ -75,7 +80,7 @@ export async function POST(req: Request) {
         await tx.capitalMovement.create({
           data: {
             id: uid("cap"),
-            ownerId: body.id,
+            ownerId,
             createdByUserId: user.id,
             updatedByUserId: user.id,
             type: "CAPITAL_INICIAL",
@@ -93,9 +98,9 @@ export async function POST(req: Request) {
           actorUserId: user.id,
           action: "owner.created",
           entity: AuditEntity.OWNER,
-          entityId: body.id,
+          entityId: ownerId,
           payload: {
-            ownerId: body.id,
+            ownerId,
             nombre: body.nombre,
             tipo: body.tipo,
             capitalInicial: body.capitalInicial,
@@ -105,7 +110,7 @@ export async function POST(req: Request) {
       );
     });
 
-    return NextResponse.json({ ok: true, ownerId: body.id });
+    return NextResponse.json({ ok: true, ownerId });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ ok: false, error: error.flatten() }, { status: 400 });
@@ -117,4 +122,13 @@ export async function POST(req: Request) {
 
 function dec(n: number) {
   return new Prisma.Decimal(Math.round((n + Number.EPSILON) * 100) / 100);
+}
+
+async function generateOwnerId() {
+  for (let i = 0; i < 5; i += 1) {
+    const candidate = uid("own");
+    const existing = await db.owner.findUnique({ where: { id: candidate }, select: { id: true } });
+    if (!existing) return candidate;
+  }
+  throw new Error("No se pudo generar un ID único para el inversionista");
 }
