@@ -2,6 +2,8 @@
 
 Sistema financiero para tienda, con trazabilidad de compras, lotes, ventas, capital y utilidad por inversionista.
 
+Documentación extendida para agentes: `docs/README.md`.
+
 ## Estado actual del proyecto
 
 ### Hecho
