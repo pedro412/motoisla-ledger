@@ -88,6 +88,31 @@ export default function InvestorsPage() {
     }
   }
 
+  async function deleteInvestor(ownerId: string, nombre: string) {
+    setResult("");
+    const typed = window.prompt(
+      `Vas a borrar completamente a ${nombre} (${ownerId}).\n` +
+        "Esto elimina compras, lotes, ventas relacionadas, movimientos y utilidades.\n" +
+        "Escribe BORRAR para confirmar:",
+    );
+    if (!typed) return;
+    if (typed.trim().toUpperCase() !== "BORRAR") {
+      setResult(JSON.stringify({ ok: false, error: "Confirmación inválida. Debes escribir BORRAR." }, null, 2));
+      return;
+    }
+
+    const res = await fetch(`/api/investors/${encodeURIComponent(ownerId)}`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirmText: typed.trim() }),
+    });
+    const json = await res.json();
+    setResult(JSON.stringify(json, null, 2));
+    if (res.ok && json.ok) {
+      await loadInvestors();
+    }
+  }
+
   return (
     <section>
       <div className="card">
@@ -122,7 +147,7 @@ export default function InvestorsPage() {
                 <th>Nombre</th>
                 <th>Tipo</th>
                 <th>Capital inicial</th>
-                <th>Acción</th>
+                <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -143,9 +168,18 @@ export default function InvestorsPage() {
                     />
                   </td>
                   <td>
-                    <button type="button" onClick={() => updateCapital(inv.id)}>
-                      Guardar capital
-                    </button>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button type="button" onClick={() => updateCapital(inv.id)}>
+                        Guardar capital
+                      </button>
+                      <button
+                        type="button"
+                        style={{ background: "#dc2626" }}
+                        onClick={() => deleteInvestor(inv.id, inv.nombre)}
+                      >
+                        Borrar
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
