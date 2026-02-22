@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { parseLS2InvoiceText, type ParsedLine } from "@/lib/parse/ls2Invoice";
 
 type Investor = {
   id: string;
@@ -10,9 +11,32 @@ type Investor = {
 export default function NewPurchasePage() {
   const [investors, setInvestors] = useState<Investor[]>([]);
   const [selectedOwnerId, setSelectedOwnerId] = useState("");
+  const [rawText, setRawText] = useState("");
   const [loadingInvestors, setLoadingInvestors] = useState(true);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<string>("");
+  const [linePreviewError, setLinePreviewError] = useState("");
+
+  const previewLines = useMemo<ParsedLine[]>(() => {
+    const raw = rawText.trim();
+    if (!raw) {
+      setLinePreviewError("");
+      return [];
+    }
+    try {
+      const lines = parseLS2InvoiceText(raw);
+      setLinePreviewError("");
+      return lines;
+    } catch (error) {
+      setLinePreviewError(error instanceof Error ? error.message : "No se pudo parsear el texto");
+      return [];
+    }
+  }, [rawText]);
+
+  const previewSubtotal = useMemo(
+    () => round2(previewLines.reduce((acc, line) => acc + Number(line.lineTotalNet || 0), 0)),
+    [previewLines],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -65,7 +89,7 @@ export default function NewPurchasePage() {
       taxTotal: Number(form.get("taxTotal") || 0),
       totalGross: Number(form.get("totalGross") || 0),
       taxRate: Number(form.get("taxRate") || 0.16),
-      rawText: String(form.get("rawText") || ""),
+      rawText,
       defaultOwnerId: selectedOwnerId,
     };
 
@@ -110,11 +134,66 @@ export default function NewPurchasePage() {
         </div>
         <label>
           Texto de factura LS2
-          <textarea name="rawText" rows={12} required placeholder="Pega el texto de factura aquí" />
+          <textarea
+            name="rawText"
+            rows={12}
+            required
+            placeholder="Pega el texto de factura aquí"
+            value={rawText}
+            onChange={(e) => setRawText(e.target.value)}
+          />
         </label>
-        <button type="submit" disabled={loading}>{loading ? "Importando..." : "Importar"}</button>
+        <div className="card" style={{ marginTop: 8 }}>
+          <h3 style={{ marginTop: 0 }}>Vista previa de líneas detectadas</h3>
+          <p style={{ marginTop: 0, fontSize: 13 }}>
+            Líneas: <strong>{previewLines.length}</strong> · Subtotal detectado: <strong>${formatMoney(previewSubtotal)}</strong>
+          </p>
+          {linePreviewError && <p style={{ color: "crimson", marginTop: 0 }}>{linePreviewError}</p>}
+          {!linePreviewError && previewLines.length > 0 && (
+            <div style={{ overflowX: "auto" }}>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>SKU</th>
+                    <th>Cant.</th>
+                    <th>Unidad</th>
+                    <th>Descripción</th>
+                    <th>P. unit neto</th>
+                    <th>Total neto</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {previewLines.map((line, idx) => (
+                    <tr key={`${line.supplierSku}-${idx}`}>
+                      <td>{line.supplierSku}</td>
+                      <td>{line.qty}</td>
+                      <td>{line.unit}</td>
+                      <td>{line.description}</td>
+                      <td>{line.unitPriceNet != null ? `$${formatMoney(line.unitPriceNet)}` : "-"}</td>
+                      <td>${formatMoney(line.lineTotalNet)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {!linePreviewError && rawText.trim().length > 0 && previewLines.length === 0 && (
+            <p style={{ marginBottom: 0 }}>No se detectaron líneas válidas aún.</p>
+          )}
+        </div>
+        <button type="submit" disabled={loading || previewLines.length === 0 || !!linePreviewError}>
+          {loading ? "Importando..." : "Importar"}
+        </button>
       </form>
       {result && <pre>{result}</pre>}
     </section>
   );
+}
+
+function round2(n: number) {
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
+function formatMoney(n: number) {
+  return new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 }
