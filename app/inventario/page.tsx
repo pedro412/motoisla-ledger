@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import Link from "next/link";
 import { db } from "@/lib/db";
 import { getSessionUser, isInvestor, isStaff } from "@/lib/authz";
 import { CancelPurchaseButton } from "@/app/inventario/CancelPurchaseButton";
@@ -26,7 +27,11 @@ type LotView = {
   unitCostGross: number;
 };
 
-export default async function InventarioPage() {
+export default async function InventarioPage({
+  searchParams,
+}: {
+  searchParams?: { showCancelled?: string };
+}) {
   const user = await getSessionUser();
   if (!user) {
     return (
@@ -38,6 +43,7 @@ export default async function InventarioPage() {
   }
 
   const ownerFilter = isInvestor(user) ? user.ownerId ?? "__none__" : undefined;
+  const showCancelled = searchParams?.showCancelled === "1";
   const canManagePurchases = isStaff(user);
   const [purchases, lots, soldRows] = await Promise.all([
     db.purchase.findMany({
@@ -123,19 +129,32 @@ export default async function InventarioPage() {
   }
 
   const sortedGroups = Array.from(groups.values()).sort((a, b) => parseDate(b.date) - parseDate(a.date));
+  const visibleGroups = showCancelled ? sortedGroups : sortedGroups.filter((g) => g.status !== "CANCELLED");
+  const cancelledCount = sortedGroups.filter((g) => g.status === "CANCELLED").length;
 
   return (
     <section>
       <h1>Inventario por factura</h1>
       <p>Vista agrupada por compra (`id_compra`) con estado por lote.</p>
+      <div className="card" style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+        <span style={{ fontSize: 13 }}>
+          Compras canceladas: <strong>{cancelledCount}</strong> {showCancelled ? "(visibles)" : "(ocultas)"}
+        </span>
+        <Link
+          href={showCancelled ? "/inventario" : "/inventario?showCancelled=1"}
+          className={showCancelled ? "move-badge move-badge-compra" : "move-badge move-badge-transfer"}
+        >
+          {showCancelled ? "Ocultar canceladas" : "Mostrar canceladas"}
+        </Link>
+      </div>
 
-      {sortedGroups.length === 0 && (
+      {visibleGroups.length === 0 && (
         <div className="card">
-          <p>No hay lotes todavía.</p>
+          <p>No hay lotes para este filtro.</p>
         </div>
       )}
 
-      {sortedGroups.map((group) => {
+      {visibleGroups.map((group) => {
         const totalAvailable = group.lots.reduce((acc, lot) => acc + lot.qtyAvailable, 0);
         const totalCost = group.lots.reduce((acc, lot) => acc + lot.qtyAvailable * lot.unitCostGross, 0);
 
