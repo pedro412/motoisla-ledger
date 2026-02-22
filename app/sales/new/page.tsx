@@ -248,7 +248,7 @@ export default function NewSalePage() {
             </label>
           </div>
           <p style={{ marginTop: 8, fontSize: 13 }}>
-            Tasa comisión aplicada: {(commissionRate * 100).toFixed(2)}% | Comisión estimada: ${commissionPreview.toFixed(2)} | Ingreso neto estimado: ${netPreview.toFixed(2)}
+            Tasa comisión aplicada: {(commissionRate * 100).toFixed(2)}% | Comisión estimada: ${formatMoney(commissionPreview)} | Ingreso neto estimado: ${formatMoney(netPreview)}
           </p>
           {terminalPayment && !threeMonthsNoInterest && (
             <p style={{ marginTop: 6, fontSize: 12, color: "#4b5563" }}>
@@ -310,4 +310,11 @@ export default function NewSalePage() {
       {result && <pre>{result}</pre>}
     </section>
   );
+}
+
+function formatMoney(n: number) {
+  return new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(n);
 }

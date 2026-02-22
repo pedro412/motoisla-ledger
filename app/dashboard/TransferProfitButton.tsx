@@ -16,7 +16,7 @@ export function TransferProfitButton({ ownerId, available }: { ownerId: string; 
     const parsedAmount = Number(amount || 0);
     const selectedAmount = mode === "all" ? undefined : parsedAmount;
     if (mode === "partial" && (!Number.isFinite(parsedAmount) || parsedAmount <= 0 || parsedAmount > available)) {
-      setMsg(`Monto inválido. Debe ser mayor a 0 y menor o igual a ${available.toFixed(2)}.`);
+      setMsg(`Monto inválido. Debe ser mayor a 0 y menor o igual a ${formatMoney(available)}.`);
       return;
     }
 
@@ -32,7 +32,7 @@ export function TransferProfitButton({ ownerId, available }: { ownerId: string; 
       if (!res.ok || !json.ok) {
         throw new Error(json.error || "No se pudo transferir utilidad");
       }
-      setMsg(`Transferido: $${Number(json.transferredAmount ?? 0).toFixed(2)}`);
+      setMsg(`Transferido: $${formatMoney(Number(json.transferredAmount ?? 0))}`);
       setOpen(false);
       setAmount("");
       router.refresh();
@@ -62,7 +62,7 @@ export function TransferProfitButton({ ownerId, available }: { ownerId: string; 
           <div style={{ background: "#fff", borderRadius: 10, width: "min(460px, 92vw)", padding: 16 }}>
             <h3 style={{ marginTop: 0 }}>Transferir utilidad a capital</h3>
             <p style={{ fontSize: 13, marginTop: 0 }}>
-              Utilidad disponible: <strong>${available.toFixed(2)}</strong>
+              Utilidad disponible: <strong>${formatMoney(available)}</strong>
             </p>
             <div style={{ display: "grid", gap: 8, marginBottom: 10 }}>
               <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -117,4 +117,11 @@ export function TransferProfitButton({ ownerId, available }: { ownerId: string; 
       {msg && <p style={{ marginTop: 8, fontSize: 13 }}>{msg}</p>}
     </div>
   );
+}
+
+function formatMoney(n: number) {
+  return new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(n);
 }

@@ -34,6 +34,8 @@
       hsl(var(--background));
     color: hsl(var(--foreground));
     font-family: var(--font-body), sans-serif;
+    font-size: 17px;
+    line-height: 1.45;
   }
 
   h1,
@@ -53,13 +55,13 @@
   }
 
   label {
-    @apply mb-2 block text-sm font-medium text-slate-700;
+    @apply mb-2 block text-base font-medium text-slate-700;
   }
 
   input,
   textarea,
   select {
-    @apply mt-1 w-full rounded-md border border-input bg-white px-3 py-2 text-sm shadow-sm outline-none transition focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/25;
+    @apply mt-1 w-full rounded-md border border-input bg-white px-3 py-2 text-base shadow-sm outline-none transition focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/25;
   }
 }
 
@@ -79,7 +81,7 @@
   }
 
   button {
-    @apply inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:brightness-95 disabled:pointer-events-none disabled:opacity-50;
+    @apply inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-base font-semibold text-primary-foreground transition hover:brightness-95 disabled:pointer-events-none disabled:opacity-50;
   }
 
   .table {
@@ -87,11 +89,11 @@
   }
 
   .table th {
-    @apply bg-slate-50 px-3 py-2 text-left text-xs font-bold uppercase tracking-wide text-slate-500;
+    @apply bg-slate-50 px-3 py-2 text-left text-sm font-bold uppercase tracking-wide text-slate-500;
   }
 
   .table td {
-    @apply border-t border-border px-3 py-2 text-sm;
+    @apply border-t border-border px-3 py-2 text-base;
   }
 
   .kpi-card {
