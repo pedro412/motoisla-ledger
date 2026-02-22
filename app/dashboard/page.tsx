@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { OwnerType, Prisma } from "@prisma/client";
+import { CapitalMovementType, OwnerType, Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { TransferProfitButton } from "@/app/dashboard/TransferProfitButton";
 import { canAccessOwner, getSessionUser, isInvestor } from "@/lib/authz";
@@ -148,12 +148,17 @@ export default async function DashboardPage({
       .reduce((acc, m) => acc + toNumber(m.amount), 0),
   );
   const availableToTransfer = round2(Math.max(0, accruedProfit - transferredFromProfit));
-  const capitalFlow = round2(movements.reduce((acc, m) => acc + toNumber(m.amount), 0));
+  const initialAdjustFlow = round2(
+    movements
+      .filter((m) => isInitialOrAdjustType(m.type))
+      .reduce((acc, m) => acc + toNumber(m.amount), 0),
+  );
+  const capitalFlow = round2(movements.reduce((acc, m) => acc + toNumber(m.amount), 0) - initialAdjustFlow);
   const currentCapital = round2(toNumber(owner.initialCapital) + capitalFlow);
   const capitalPlusInventory = round2(currentCapital + inventoryCost);
 
   const runningMoves: CapitalMovementView[] = [];
-  let running = toNumber(owner.initialCapital);
+  let running = round2(toNumber(owner.initialCapital) - initialAdjustFlow);
   for (const m of movements) {
     running = round2(running + toNumber(m.amount));
     runningMoves.push({
@@ -382,6 +387,10 @@ function paymentLabelFromSale(terminalPayment: boolean, threeMonthsNoInterest: b
 
 function round2(n: number) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
+function isInitialOrAdjustType(type: string) {
+  return type === CapitalMovementType.CAPITAL_INICIAL || type === CapitalMovementType.AJUSTE_CAPITAL_INICIAL;
 }
 
 function formatDateTime(date: Date) {

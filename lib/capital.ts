@@ -109,17 +109,41 @@ export async function getOwnerInitialCapital(ownerId: string) {
 
 export async function getOwnerCapitalSnapshot(ownerId: string) {
   const initialCapital = await getOwnerInitialCapital(ownerId);
-  const aggregate = await db.capitalMovement.aggregate({
-    where: { ownerId },
-    _sum: { amount: true },
-  });
+  const [aggregateAll, aggregateInitialAdjust] = await Promise.all([
+    db.capitalMovement.aggregate({
+      where: { ownerId },
+      _sum: { amount: true },
+    }),
+    db.capitalMovement.aggregate({
+      where: {
+        ownerId,
+        type: { in: [CapitalMovementType.CAPITAL_INICIAL, CapitalMovementType.AJUSTE_CAPITAL_INICIAL] },
+      },
+      _sum: { amount: true },
+    }),
+  ]);
 
-  const flow = toNumber(aggregate._sum.amount);
+  const totalFlow = toNumber(aggregateAll._sum.amount);
+  const initialAdjustFlow = toNumber(aggregateInitialAdjust._sum.amount);
+  const flow = round2(totalFlow - initialAdjustFlow);
+
   return {
     initialCapital,
     capitalFlow: flow,
     currentCapital: round2(initialCapital + flow),
   };
+}
+
+export function isInitialOrAdjustMovementType(type: CapitalMovementType) {
+  return type === CapitalMovementType.CAPITAL_INICIAL || type === CapitalMovementType.AJUSTE_CAPITAL_INICIAL;
+}
+
+async function getOwnerAccruedProfit(ownerId: string) {
+  const aggregate = await db.profitSplit.aggregate({
+    where: { ownerId },
+    _sum: { profitShareGross: true },
+  });
+  return round2(toNumber(aggregate._sum.profitShareGross));
 }
 
 export async function appendCapitalMovement(params: {
@@ -219,14 +243,6 @@ function inferReferenceType(type: CapitalMovementType) {
   if (type === CapitalMovementType.COMPRA) return "PURCHASE";
   if (type === CapitalMovementType.VENTA_COSTO) return "SALE";
   return "TRANSFER";
-}
-
-async function getOwnerAccruedProfit(ownerId: string) {
-  const aggregate = await db.profitSplit.aggregate({
-    where: { ownerId },
-    _sum: { profitShareGross: true },
-  });
-  return round2(toNumber(aggregate._sum.profitShareGross));
 }
 
 async function getOwnerTransferredProfit(ownerId: string) {
