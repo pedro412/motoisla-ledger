@@ -97,7 +97,15 @@ export default async function DashboardPage({
           }),
           db.saleLine.findMany({
             where: { lotId: { in: lotIds } },
-            select: { saleId: true, netRevenue: true, profitGross: true, cogsGross: true, lotId: true },
+            select: {
+              saleId: true,
+              grossRevenue: true,
+              terminalFee: true,
+              netRevenue: true,
+              profitGross: true,
+              cogsGross: true,
+              lotId: true,
+            },
           }),
         ])
       : [[], []];
@@ -127,11 +135,11 @@ export default async function DashboardPage({
   );
 
   const totalSales = round2(
-    saleLines.reduce((acc, line) => acc + toNumber(line.netRevenue) + toNumber(line.cogsGross), 0),
+    saleLines.reduce((acc, line) => acc + toNumber(line.grossRevenue), 0),
   );
   const totalPurchases = round2(purchases.reduce((acc, p) => acc + toNumber(p.totalGross), 0));
   const totalProfit = round2(saleLines.reduce((acc, line) => acc + toNumber(line.profitGross), 0));
-  const totalTerminalFees = round2(totalSales - totalProfit - saleLines.reduce((acc, l) => acc + toNumber(l.cogsGross), 0));
+  const totalTerminalFees = round2(saleLines.reduce((acc, line) => acc + toNumber(line.terminalFee), 0));
 
   const soldByLot = new Map(soldRows.map((r) => [r.lotId, toNumber(r._sum.qty)]));
   const inventoryCost = round2(
