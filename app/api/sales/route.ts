@@ -7,6 +7,7 @@ import { resolveProfitOwners } from "@/lib/capital";
 import { SaleCreateSchema } from "@/types/schemas";
 import { getSessionUser, isStaff } from "@/lib/authz";
 import { logAudit } from "@/lib/audit";
+import { revalidateUiPaths } from "@/lib/revalidate";
 
 export async function POST(req: Request) {
   try {
@@ -191,6 +192,8 @@ export async function POST(req: Request) {
         tx,
       );
     });
+
+    revalidateUiPaths(["/dashboard", "/inventario", "/sales", "/auditoria"]);
 
     return NextResponse.json({
       ok: true,

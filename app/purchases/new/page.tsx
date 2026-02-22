@@ -1,9 +1,11 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { parseInvoiceByFormat, type InvoiceFormat } from "@/lib/parse/invoiceParser";
 import type { ParsedLine } from "@/lib/parse/ls2Invoice";
 import { MoneyInput } from "@/components/ui/money-input";
+import { LoadingButton } from "@/components/ui/loading-button";
 
 type Investor = {
   id: string;
@@ -11,6 +13,7 @@ type Investor = {
 };
 
 export default function NewPurchasePage() {
+  const router = useRouter();
   const [investors, setInvestors] = useState<Investor[]>([]);
   const [selectedOwnerId, setSelectedOwnerId] = useState("");
   const [invoiceFormat, setInvoiceFormat] = useState<InvoiceFormat>("LS2");
@@ -23,7 +26,8 @@ export default function NewPurchasePage() {
   const [totalTouched, setTotalTouched] = useState(false);
   const [loadingInvestors, setLoadingInvestors] = useState(true);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<string>("");
+  const [navigatingDashboard, setNavigatingDashboard] = useState(false);
+  const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [linePreviewError, setLinePreviewError] = useState("");
 
   const previewLines = useMemo<ParsedLine[]>(() => {
@@ -83,13 +87,10 @@ export default function NewPurchasePage() {
         }
       } catch (error) {
         if (!cancelled) {
-          setResult(
-            JSON.stringify(
-              { ok: false, error: error instanceof Error ? error.message : "Error cargando inversionistas" },
-              null,
-              2,
-            ),
-          );
+          setNotice({
+            type: "error",
+            message: error instanceof Error ? error.message : "Error cargando inversionistas",
+          });
         }
       } finally {
         if (!cancelled) {
@@ -105,10 +106,11 @@ export default function NewPurchasePage() {
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const formEl = event.currentTarget;
+    setNotice(null);
     setLoading(true);
-    setResult("");
 
-    const form = new FormData(event.currentTarget);
+    const form = new FormData(formEl);
     const payload = {
       supplier: String(form.get("supplier") || ""),
       invoiceFormat,
@@ -122,20 +124,61 @@ export default function NewPurchasePage() {
       defaultOwnerId: selectedOwnerId,
     };
 
-    const res = await fetch("/api/purchases", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    try {
+      const res = await fetch("/api/purchases", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-    const json = await res.json();
-    setResult(JSON.stringify(json, null, 2));
-    setLoading(false);
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "No se pudo guardar la compra");
+      }
+
+      setNotice({
+        type: "success",
+        message: `Compra importada correctamente (ID: ${json.purchaseId}).`,
+      });
+
+      formEl.reset();
+      setRawText("");
+      setSubtotalNet("");
+      setTaxRate("0.16");
+      setTaxTotal("");
+      setTotalGross("");
+      setTaxTouched(false);
+      setTotalTouched(false);
+      setLinePreviewError("");
+      setInvoiceFormat("LS2");
+      if (investors.length > 0) {
+        setSelectedOwnerId(investors[0].id);
+      }
+    } catch (error) {
+      setNotice({
+        type: "error",
+        message: error instanceof Error ? error.message : "Error al guardar la compra",
+      });
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
     <section className="card">
       <h1>Nueva compra</h1>
+      {notice && (
+        <p
+          className="mb-3 rounded-md border px-3 py-2 text-sm"
+          style={{
+            background: notice.type === "success" ? "#ecfdf5" : "#fef2f2",
+            borderColor: notice.type === "success" ? "#86efac" : "#fecaca",
+            color: notice.type === "success" ? "#166534" : "#991b1b",
+          }}
+        >
+          {notice.message}
+        </p>
+      )}
       <form onSubmit={onSubmit}>
         <div className="grid">
           <label>Proveedor<input name="supplier" required /></label>
@@ -263,11 +306,31 @@ export default function NewPurchasePage() {
             <p style={{ marginBottom: 0 }}>No se detectaron líneas válidas aún.</p>
           )}
         </div>
-        <button type="submit" disabled={loading || previewLines.length === 0 || !!linePreviewError}>
-          {loading ? "Importando..." : "Importar"}
-        </button>
+        <LoadingButton
+          type="submit"
+          loading={loading}
+          loadingText="Importando..."
+          disabled={previewLines.length === 0 || !!linePreviewError}
+        >
+          Importar
+        </LoadingButton>
+        {notice?.type === "success" && (
+          <LoadingButton
+            type="button"
+            variant="secondary"
+            loading={navigatingDashboard}
+            loadingText="Abriendo dashboard..."
+            onClick={async () => {
+              if (navigatingDashboard) return;
+              setNavigatingDashboard(true);
+              router.push("/dashboard");
+              router.refresh();
+            }}
+          >
+            Ver dashboard actualizado
+          </LoadingButton>
+        )}
       </form>
-      {result && <pre>{result}</pre>}
     </section>
   );
 }

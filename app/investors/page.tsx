@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { MoneyInput } from "@/components/ui/money-input";
+import { LoadingButton } from "@/components/ui/loading-button";
 
 type Investor = {
   id: string;
@@ -17,6 +18,7 @@ export default function InvestorsPage() {
   const [result, setResult] = useState("");
   const [capitalDrafts, setCapitalDrafts] = useState<Record<string, string>>({});
   const [newCapitalInicial, setNewCapitalInicial] = useState("0.00");
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
 
   async function loadInvestors() {
     setLoading(true);
@@ -50,6 +52,8 @@ export default function InvestorsPage() {
 
   async function onCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (pendingAction) return;
+    setPendingAction("create");
     setResult("");
     const form = new FormData(event.currentTarget);
 
@@ -59,36 +63,47 @@ export default function InvestorsPage() {
       capitalInicial: Number(newCapitalInicial || 0),
     };
 
-    const res = await fetch("/api/investors", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const json = await res.json();
-    setResult(JSON.stringify(json, null, 2));
-    if (res.ok && json.ok) {
-      (event.currentTarget as HTMLFormElement).reset();
-      setNewCapitalInicial("0.00");
-      await loadInvestors();
+    try {
+      const res = await fetch("/api/investors", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json();
+      setResult(JSON.stringify(json, null, 2));
+      if (res.ok && json.ok) {
+        (event.currentTarget as HTMLFormElement).reset();
+        setNewCapitalInicial("0.00");
+        await loadInvestors();
+      }
+    } finally {
+      setPendingAction(null);
     }
   }
 
   async function updateCapital(ownerId: string) {
+    if (pendingAction) return;
+    setPendingAction(`update:${ownerId}`);
     setResult("");
     const nuevoCapitalInicial = Number(capitalDrafts[ownerId] || 0);
-    const res = await fetch(`/api/investors/${encodeURIComponent(ownerId)}/capital`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nuevoCapitalInicial, motivo: "Ajuste manual desde UI" }),
-    });
-    const json = await res.json();
-    setResult(JSON.stringify(json, null, 2));
-    if (res.ok && json.ok) {
-      await loadInvestors();
+    try {
+      const res = await fetch(`/api/investors/${encodeURIComponent(ownerId)}/capital`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nuevoCapitalInicial, motivo: "Ajuste manual desde UI" }),
+      });
+      const json = await res.json();
+      setResult(JSON.stringify(json, null, 2));
+      if (res.ok && json.ok) {
+        await loadInvestors();
+      }
+    } finally {
+      setPendingAction(null);
     }
   }
 
   async function deleteInvestor(ownerId: string, nombre: string) {
+    if (pendingAction) return;
     setResult("");
     const typed = window.prompt(
       `Vas a borrar completamente a ${nombre} (${ownerId}).\n` +
@@ -100,16 +115,21 @@ export default function InvestorsPage() {
       setResult(JSON.stringify({ ok: false, error: "Confirmación inválida. Debes escribir BORRAR." }, null, 2));
       return;
     }
+    setPendingAction(`delete:${ownerId}`);
 
-    const res = await fetch(`/api/investors/${encodeURIComponent(ownerId)}`, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ confirmText: typed.trim() }),
-    });
-    const json = await res.json();
-    setResult(JSON.stringify(json, null, 2));
-    if (res.ok && json.ok) {
-      await loadInvestors();
+    try {
+      const res = await fetch(`/api/investors/${encodeURIComponent(ownerId)}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmText: typed.trim() }),
+      });
+      const json = await res.json();
+      setResult(JSON.stringify(json, null, 2));
+      if (res.ok && json.ok) {
+        await loadInvestors();
+      }
+    } finally {
+      setPendingAction(null);
     }
   }
 
@@ -132,7 +152,9 @@ export default function InvestorsPage() {
               <MoneyInput name="capitalInicial" value={newCapitalInicial} onValueChange={setNewCapitalInicial} required />
             </label>
           </div>
-          <button type="submit">Crear inversionista</button>
+          <LoadingButton type="submit" disabled={!!pendingAction} loading={pendingAction === "create"} loadingText="Creando...">
+            Crear inversionista
+          </LoadingButton>
         </form>
       </div>
 
@@ -169,16 +191,26 @@ export default function InvestorsPage() {
                   </td>
                   <td>
                     <div style={{ display: "flex", gap: 8 }}>
-                      <button type="button" onClick={() => updateCapital(inv.id)}>
-                        Guardar capital
-                      </button>
-                      <button
+                      <LoadingButton
                         type="button"
+                        disabled={!!pendingAction}
+                        onClick={() => updateCapital(inv.id)}
+                        loading={pendingAction === `update:${inv.id}`}
+                        loadingText="Guardando..."
+                      >
+                        Guardar capital
+                      </LoadingButton>
+                      <LoadingButton
+                        type="button"
+                        variant="danger"
                         style={{ background: "#dc2626" }}
+                        disabled={!!pendingAction}
                         onClick={() => deleteInvestor(inv.id, inv.nombre)}
+                        loading={pendingAction === `delete:${inv.id}`}
+                        loadingText="Borrando..."
                       >
                         Borrar
-                      </button>
+                      </LoadingButton>
                     </div>
                   </td>
                 </tr>

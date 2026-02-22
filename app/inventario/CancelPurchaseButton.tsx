@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { LoadingButton } from "@/components/ui/loading-button";
 
 export function CancelPurchaseButton({ purchaseId }: { purchaseId: string }) {
   const router = useRouter();
@@ -32,8 +32,8 @@ export function CancelPurchaseButton({ purchaseId }: { purchaseId: string }) {
   }
 
   return (
-    <Button type="button" variant="danger" size="sm" onClick={onCancel} disabled={loading}>
-      {loading ? "Cancelando..." : "Cancelar compra"}
-    </Button>
+    <LoadingButton type="button" variant="danger" size="sm" onClick={onCancel} loading={loading} loadingText="Cancelando...">
+      Cancelar compra
+    </LoadingButton>
   );
 }

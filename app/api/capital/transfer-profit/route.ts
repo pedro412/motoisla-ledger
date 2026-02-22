@@ -5,6 +5,7 @@ import { transferProfitToCapital } from "@/lib/capital";
 import { db } from "@/lib/db";
 import { canAccessOwner, getSessionUser, isStaff } from "@/lib/authz";
 import { logAudit } from "@/lib/audit";
+import { revalidateUiPaths } from "@/lib/revalidate";
 
 const BodySchema = z.object({
   ownerId: z.string().min(1).optional(),
@@ -40,6 +41,7 @@ export async function POST(req: Request) {
         currentCapitalAfter: result.currentCapitalAfter,
       },
     });
+    revalidateUiPaths(["/dashboard", "/auditoria"]);
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";

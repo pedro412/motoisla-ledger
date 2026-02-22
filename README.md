@@ -17,6 +17,7 @@ Documentación extendida para agentes: `docs/README.md`.
   - venta con validación de stock por lote
   - comisiones terminal (0%, 2%, 5.58%)
   - utilidad + capital + transferencia utilidad->capital
+  - borrado de venta (auditable) con restauración de stock/capital/utilidad
   - recálculo y reconciliación
 - Multi-inversionista:
   - dashboard por inversionista
@@ -31,6 +32,11 @@ Documentación extendida para agentes: `docs/README.md`.
 - UI refresh:
   - nuevo shell (sidebar + topbar)
   - paleta y componentes base (Tailwind + utilidades UI)
+  - dashboard con gráficas (Recharts)
+  - login limpio (sin menú)
+  - botones de acción con estado loading + spinner
+  - mensajes de éxito/error amigables en formularios de compra/venta
+  - refresco visual de dashboard tras operaciones críticas
 
 ### En progreso
 
@@ -38,7 +44,7 @@ Documentación extendida para agentes: `docs/README.md`.
 
 ### Backlog (priorizado)
 
-- Cancelación de venta (auditable) con reversa controlada de inventario/capital/utilidad.
+- Cancelación/reversa avanzada de venta con reglas más estrictas de dependencias posteriores.
 - Motor de reparto configurable por inversionista (actualmente está fijo 50/50 en venta y recalculate).
 - Auditoría avanzada (filtros por rango, exportación, búsqueda full-text).
 - Endurecer reglas de negocio opcionales (por ejemplo, no mezclar lotes de distintos inversionistas en una venta).
@@ -109,6 +115,7 @@ npm run dev
 - `/investors`
 - `/purchases/new`
 - `/sales/new`
+- `/sales`
 - `/auditoria`
 - `/login`
 
@@ -134,6 +141,7 @@ npm run dev
 - `POST /api/purchases/:id/cancel`
 - `GET /api/lots?ownerId=<id>`
 - `POST /api/sales`
+- `DELETE /api/sales/:id`
 - `POST /api/sales/recalculate`
 
 ### Capital
@@ -164,6 +172,7 @@ npm run dev
   - `tests/integration/apiAuthz.test.ts` (401/403 por endpoint)
   - `tests/integration/roleFlows.test.ts` (scoping por rol en endpoints)
   - `tests/integration/operationalFlow.test.ts` (compra/venta exitosas con auditoría y movimientos)
+  - `tests/integration/saleDelete.test.ts` (borrado de venta y restauración contable)
 
 ## Nota sobre Google Sheets
 
@@ -212,9 +221,9 @@ Opcionales de seed:
 
 ## Siguientes pasos
 
-1. Implementar cancelación de venta con reglas de seguridad:
-   - no permitir cancelar si ya hubo movimientos posteriores incompatibles
-   - registrar reversas y auditoría completa
+1. Endurecer reversa de venta:
+   - reglas adicionales de orden cronológico/dependencias posteriores
+   - estrategia de reversa "soft cancel" además de borrado
 2. Implementar reparto configurable por inversionista (reemplazar 50/50 fijo).
 3. Mejorar auditoría:
    - filtros por rango de fecha

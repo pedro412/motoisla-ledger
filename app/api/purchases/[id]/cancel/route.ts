@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { getSessionUser, isStaff } from "@/lib/authz";
 import { logAudit } from "@/lib/audit";
 import { uid } from "@/lib/ids";
+import { revalidateUiPaths } from "@/lib/revalidate";
 
 const BodySchema = z.object({
   reason: z.string().trim().min(3).max(300),
@@ -106,6 +107,8 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
         tx,
       );
     });
+
+    revalidateUiPaths(["/dashboard", "/inventario", "/auditoria"]);
 
     return NextResponse.json({ ok: true, purchaseId });
   } catch (error) {

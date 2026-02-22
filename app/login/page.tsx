@@ -3,7 +3,7 @@
 import { FormEvent, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
-import { Button } from "@/components/ui/button";
+import { LoadingButton } from "@/components/ui/loading-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function LoginPage() {
@@ -39,6 +39,9 @@ export default function LoginPage() {
 
   return (
     <section className="mx-auto max-w-md pt-12">
+      <div className="mb-4 text-center">
+        <h1 className="mb-1 text-3xl font-bold">MotoIsla Ledger</h1>
+      </div>
       <Card>
         <CardHeader>
           <CardTitle className="text-2xl">Iniciar sesión</CardTitle>
@@ -66,13 +69,16 @@ export default function LoginPage() {
                 required
               />
             </label>
-            <Button type="submit" disabled={loading} className="w-full">
-              {loading ? "Entrando..." : "Entrar"}
-            </Button>
+            <LoadingButton type="submit" loading={loading} loadingText="Entrando..." className="w-full">
+              Entrar
+            </LoadingButton>
           </form>
           {error && <p className="mt-3 text-sm text-danger">{error}</p>}
         </CardContent>
       </Card>
+      <p className="mt-4 text-center text-sm text-muted-foreground">
+        Si perdiste tus credenciales o tienes un problema, contacta a Moto Isla directamente.
+      </p>
     </section>
   );
 }

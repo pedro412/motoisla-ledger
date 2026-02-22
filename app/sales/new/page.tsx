@@ -1,6 +1,8 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { LoadingButton } from "@/components/ui/loading-button";
+import { useRouter } from "next/navigation";
 
 type SaleLine = {
   lotId: string;
@@ -23,6 +25,7 @@ type Investor = { id: string; nombre: string };
 const emptyLine: SaleLine = { lotId: "", sku: "", qty: 1, unitPriceGross: 0, discountGross: 0 };
 
 export default function NewSalePage() {
+  const router = useRouter();
   const [lines, setLines] = useState<SaleLine[]>([{ ...emptyLine }]);
   const [investors, setInvestors] = useState<Investor[]>([]);
   const [ownerFilter, setOwnerFilter] = useState("");
@@ -32,7 +35,8 @@ export default function NewSalePage() {
   const [loadingLots, setLoadingLots] = useState(true);
   const [lotsError, setLotsError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState("");
+  const [navigatingDashboard, setNavigatingDashboard] = useState(false);
+  const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   const lotsById = useMemo(() => new Map(lots.map((lot) => [lot.lotId, lot])), [lots]);
 
@@ -133,6 +137,21 @@ export default function NewSalePage() {
   const commissionPreview = grossPreview * commissionRate;
   const netPreview = grossPreview - commissionPreview;
 
+  function computeLineMetrics(line: SaleLine) {
+    const lot = lotsById.get(line.lotId);
+    if (!lot) return null;
+
+    const qty = Number(line.qty || 0);
+    const gross = qty * Number(line.unitPriceGross || 0) - Number(line.discountGross || 0);
+    const fee = gross * commissionRate;
+    const net = gross - fee;
+    const cogs = qty * Number(lot.unitCostGross || 0);
+    const profit = net - cogs;
+    const marginPct = net > 0 ? (profit / net) * 100 : 0;
+
+    return { gross, fee, net, cogs, profit, marginPct };
+  }
+
   function getRemainingQtyForLine(index: number) {
     const line = lines[index];
     if (!line?.lotId) return undefined;
@@ -150,29 +169,24 @@ export default function NewSalePage() {
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const formEl = event.currentTarget;
+    setNotice(null);
     setLoading(true);
-    setResult("");
 
     for (let i = 0; i < lines.length; i += 1) {
       const remaining = getRemainingQtyForLine(i);
       if (remaining == null) continue;
       if (lines[i].qty > remaining) {
-        setResult(
-          JSON.stringify(
-            {
-              ok: false,
-              error: `La cantidad en la línea ${i + 1} excede el disponible del lote (${remaining}).`,
-            },
-            null,
-            2,
-          ),
-        );
+        setNotice({
+          type: "error",
+          message: `La cantidad en la línea ${i + 1} excede el disponible del lote (${remaining}).`,
+        });
         setLoading(false);
         return;
       }
     }
 
-    const form = new FormData(event.currentTarget);
+    const form = new FormData(formEl);
     const payload = {
       date: String(form.get("date") || ""),
       channel: String(form.get("channel") || "STORE"),
@@ -182,20 +196,53 @@ export default function NewSalePage() {
       lines,
     };
 
-    const res = await fetch("/api/sales", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    try {
+      const res = await fetch("/api/sales", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-    const json = await res.json();
-    setResult(JSON.stringify(json, null, 2));
-    setLoading(false);
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "No se pudo guardar la venta");
+      }
+
+      setNotice({
+        type: "success",
+        message: `Venta guardada correctamente (ID: ${json.saleId}).`,
+      });
+
+      formEl.reset();
+      setLines([{ ...emptyLine }]);
+      setTerminalPayment(false);
+      setThreeMonthsNoInterest(false);
+      setOwnerFilter("");
+    } catch (error) {
+      setNotice({
+        type: "error",
+        message: error instanceof Error ? error.message : "Error al guardar la venta",
+      });
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
     <section className="card">
       <h1>Nueva venta</h1>
+      {notice && (
+        <p
+          className="mb-3 rounded-md border px-3 py-2 text-sm"
+          style={{
+            background: notice.type === "success" ? "#ecfdf5" : "#fef2f2",
+            borderColor: notice.type === "success" ? "#86efac" : "#fecaca",
+            color: notice.type === "success" ? "#166534" : "#991b1b",
+          }}
+        >
+          {notice.message}
+        </p>
+      )}
       {loadingLots && <p>Cargando lotes disponibles...</p>}
       {lotsError && <p style={{ color: "crimson" }}>Error cargando lotes: {lotsError}</p>}
       <form onSubmit={onSubmit}>
@@ -260,6 +307,15 @@ export default function NewSalePage() {
         {lines.map((line, i) => (
           <div className="card" key={`line-${i}`}>
             <h3>Línea {i + 1}</h3>
+            {(() => {
+              const metrics = computeLineMetrics(line);
+              if (!metrics) return null;
+              return (
+                <p style={{ marginTop: 0, marginBottom: 10, fontSize: 13, fontWeight: 600, color: metrics.profit >= 0 ? "#047857" : "#be123c" }}>
+                  Utilidad estimada: ${formatMoney(metrics.profit)} ({metrics.marginPct.toFixed(2)}%)
+                </p>
+              );
+            })()}
             <div className="grid">
               <label>
                 Lot ID
@@ -304,10 +360,27 @@ export default function NewSalePage() {
 
         <div style={{ display: "flex", gap: 8 }}>
           <button type="button" onClick={addLine}>Agregar línea</button>
-          <button type="submit" disabled={loading}>{loading ? "Guardando..." : "Guardar venta"}</button>
+          <LoadingButton type="submit" loading={loading} loadingText="Guardando...">
+            Guardar venta
+          </LoadingButton>
+          {notice?.type === "success" && (
+            <LoadingButton
+              type="button"
+              variant="secondary"
+              loading={navigatingDashboard}
+              loadingText="Abriendo dashboard..."
+              onClick={async () => {
+                if (navigatingDashboard) return;
+                setNavigatingDashboard(true);
+                router.push("/dashboard");
+                router.refresh();
+              }}
+            >
+              Ver dashboard actualizado
+            </LoadingButton>
+          )}
         </div>
       </form>
-      {result && <pre>{result}</pre>}
     </section>
   );
 }

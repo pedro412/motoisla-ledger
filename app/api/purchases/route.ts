@@ -9,6 +9,7 @@ import { PurchaseImportSchema } from "@/types/schemas";
 import { db } from "@/lib/db";
 import { getSessionUser, isStaff } from "@/lib/authz";
 import { logAudit } from "@/lib/audit";
+import { revalidateUiPaths } from "@/lib/revalidate";
 
 export async function POST(req: Request) {
   try {
@@ -132,6 +133,8 @@ export async function POST(req: Request) {
         tx,
       );
     });
+
+    revalidateUiPaths(["/dashboard", "/inventario", "/auditoria"]);
 
     return NextResponse.json({ ok: true, purchaseId });
   } catch (error) {

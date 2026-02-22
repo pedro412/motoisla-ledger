@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { LoadingButton } from "@/components/ui/loading-button";
 
 export function TransferProfitButton({ ownerId, available }: { ownerId: string; available: number }) {
   const [loading, setLoading] = useState(false);
@@ -45,9 +46,9 @@ export function TransferProfitButton({ ownerId, available }: { ownerId: string; 
 
   return (
     <div style={{ marginTop: 12 }}>
-      <button onClick={() => setOpen(true)} disabled={loading || available <= 0}>
-        {loading ? "Transfiriendo..." : "Pasar utilidad a capital"}
-      </button>
+      <LoadingButton type="button" onClick={() => setOpen(true)} disabled={available <= 0} loading={loading} loadingText="Transfiriendo...">
+        Pasar utilidad a capital
+      </LoadingButton>
       {open && (
         <div
           style={{
@@ -107,9 +108,9 @@ export function TransferProfitButton({ ownerId, available }: { ownerId: string; 
               >
                 Cancelar
               </button>
-              <button type="button" onClick={transfer} disabled={loading}>
-                {loading ? "Transfiriendo..." : "Aceptar y transferir"}
-              </button>
+              <LoadingButton type="button" onClick={transfer} loading={loading} loadingText="Transfiriendo...">
+                Aceptar y transferir
+              </LoadingButton>
             </div>
           </div>
         </div>

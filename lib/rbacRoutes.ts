@@ -6,6 +6,7 @@ export function isBlockedPathForInvestor(pathname: string) {
     pathname.startsWith("/api/purchases") ||
     pathname.startsWith("/api/sales") ||
     pathname.startsWith("/api/investors") ||
-    pathname.startsWith("/api/capital/reconcile")
+    pathname.startsWith("/api/capital/reconcile") ||
+    pathname.startsWith("/api/health")
   );
 }

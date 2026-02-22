@@ -2,7 +2,8 @@ import Link from "next/link";
 import { CapitalMovementType, OwnerType, Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { TransferProfitButton } from "@/app/dashboard/TransferProfitButton";
-import { canAccessOwner, getSessionUser, isInvestor } from "@/lib/authz";
+import { ChartsPanel } from "@/app/dashboard/ChartsPanel";
+import { canAccessOwner, getSessionUser, isAdmin, isInvestor } from "@/lib/authz";
 
 type CapitalMovementView = {
   date: string;
@@ -110,9 +111,10 @@ export default async function DashboardPage({
         ])
       : [[], []];
 
-  const salesBySaleId = new Map<string, { netRevenue: number; profit: number }>();
+  const salesBySaleId = new Map<string, { grossRevenue: number; netRevenue: number; profit: number }>();
   for (const sl of saleLines) {
-    const cur = salesBySaleId.get(sl.saleId) ?? { netRevenue: 0, profit: 0 };
+    const cur = salesBySaleId.get(sl.saleId) ?? { grossRevenue: 0, netRevenue: 0, profit: 0 };
+    cur.grossRevenue += toNumber(sl.grossRevenue);
     cur.netRevenue += toNumber(sl.netRevenue);
     cur.profit += toNumber(sl.profitGross);
     salesBySaleId.set(sl.saleId, cur);
@@ -124,6 +126,7 @@ export default async function DashboardPage({
         where: { id: { in: saleIds } },
         select: {
           id: true,
+          date: true,
           terminalPayment: true,
           threeMonthsNoInterest: true,
           commissionRate: true,
@@ -182,6 +185,43 @@ export default async function DashboardPage({
   const purchaseCount = purchases.length;
   const saleCount = salesBySaleId.size;
   const avgMargin = totalSales > 0 ? (totalProfit / totalSales) * 100 : 0;
+  const trendByDate = new Map<string, { date: string; ventaNeta: number; utilidad: number }>();
+  for (const sale of sales) {
+    const agg = salesBySaleId.get(sale.id);
+    if (!agg) continue;
+    const dateKey = sale.date.toISOString().slice(0, 10);
+    const current = trendByDate.get(dateKey) ?? { date: formatDateLabel(dateKey), ventaNeta: 0, utilidad: 0 };
+    current.ventaNeta = round2(current.ventaNeta + agg.netRevenue);
+    current.utilidad = round2(current.utilidad + agg.profit);
+    trendByDate.set(dateKey, current);
+  }
+  const trendData = Array.from(trendByDate.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, value]) => value);
+
+  const capitalByDate = new Map<string, { date: string; capital: number }>();
+  for (const movement of runningMoves) {
+    capitalByDate.set(movement.date, {
+      date: formatDateLabel(movement.date),
+      capital: movement.balanceAfter,
+    });
+  }
+  const capitalEvolutionData = Array.from(capitalByDate.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, value]) => value);
+
+  const paymentCounts = new Map<string, number>();
+  for (const sale of sales) {
+    const label = paymentLabelFromSale(sale.terminalPayment, sale.threeMonthsNoInterest, toNumber(sale.commissionRate));
+    paymentCounts.set(label, (paymentCounts.get(label) ?? 0) + 1);
+  }
+  const paymentMixData = Array.from(paymentCounts.entries()).map(([metodo, ventas]) => ({ metodo, ventas }));
+
+  const capitalSplitData = [
+    { concepto: "Capital", monto: currentCapital },
+    { concepto: "Inventario", monto: inventoryCost },
+    { concepto: "Utilidad disp.", monto: availableToTransfer },
+  ];
 
   return (
     <section className="space-y-4">
@@ -210,24 +250,26 @@ export default async function DashboardPage({
         </div>
       </div>
 
-      <div className="card">
-        <h2>Selecciona inversionista</h2>
-        <div className="flex flex-wrap gap-2">
-          {(isInvestor(user) ? investorOwners.filter((o) => o.id === selectedOwnerId) : investorOwners).map((o) => (
-            <Link
-              key={o.id}
-              href={`/dashboard?ownerId=${encodeURIComponent(o.id)}`}
-              className={
-                o.id === selectedOwnerId
-                  ? "move-badge move-badge-transfer border border-sky-400 shadow-sm"
-                  : "move-badge move-badge-other border border-slate-200"
-              }
-            >
-              {o.name} ({o.id})
-            </Link>
-          ))}
+      {!isInvestor(user) && (
+        <div className="card">
+          <h2>Selecciona inversionista</h2>
+          <div className="flex flex-wrap gap-2">
+            {investorOwners.map((o) => (
+              <Link
+                key={o.id}
+                href={`/dashboard?ownerId=${encodeURIComponent(o.id)}`}
+                className={
+                  o.id === selectedOwnerId
+                    ? "move-badge move-badge-transfer border border-sky-400 shadow-sm"
+                    : "move-badge move-badge-other border border-slate-200"
+                }
+              >
+                {o.name} ({o.id})
+              </Link>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="grid">
         <div className="card kpi-card kpi-sales">
@@ -280,8 +322,15 @@ export default async function DashboardPage({
             <div className="capital-value">${formatMoney(availableToTransfer)}</div>
           </div>
         </div>
-        <TransferProfitButton ownerId={selectedOwnerId} available={availableToTransfer} />
+        {isAdmin(user) && <TransferProfitButton ownerId={selectedOwnerId} available={availableToTransfer} />}
       </div>
+
+      <ChartsPanel
+        trendData={trendData}
+        capitalEvolutionData={capitalEvolutionData}
+        paymentMixData={paymentMixData}
+        capitalSplitData={capitalSplitData}
+      />
 
       <div className="card">
         <div className="mb-2 flex items-center justify-between gap-3">
@@ -409,5 +458,13 @@ function formatDateTime(date: Date) {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
+  }).format(date);
+}
+
+function formatDateLabel(dateKey: string) {
+  const date = new Date(`${dateKey}T00:00:00Z`);
+  return new Intl.DateTimeFormat("es-MX", {
+    day: "2-digit",
+    month: "2-digit",
   }).format(date);
 }
