@@ -36,6 +36,7 @@ Sistema financiero para tienda, con trazabilidad de compras, lotes, ventas, capi
 
 ### Backlog (priorizado)
 
+- Cancelación de venta (auditable) con reversa controlada de inventario/capital/utilidad.
 - Motor de reparto configurable por inversionista (actualmente está fijo 50/50 en venta y recalculate).
 - Auditoría avanzada (filtros por rango, exportación, búsqueda full-text).
 - Endurecer reglas de negocio opcionales (por ejemplo, no mezclar lotes de distintos inversionistas en una venta).
@@ -206,3 +207,14 @@ Opcionales de seed:
 4. Si cambió `prisma/schema.prisma`, ejecutar `npx prisma db push` en entorno destino.
 5. Verificar flujos mínimos:
    - compra -> venta -> dashboard -> auditoría
+
+## Siguientes pasos
+
+1. Implementar cancelación de venta con reglas de seguridad:
+   - no permitir cancelar si ya hubo movimientos posteriores incompatibles
+   - registrar reversas y auditoría completa
+2. Implementar reparto configurable por inversionista (reemplazar 50/50 fijo).
+3. Mejorar auditoría:
+   - filtros por rango de fecha
+   - exportación CSV
+   - búsqueda por entidad/id/actor
