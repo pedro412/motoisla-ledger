@@ -12,6 +12,12 @@ export default function NewPurchasePage() {
   const [investors, setInvestors] = useState<Investor[]>([]);
   const [selectedOwnerId, setSelectedOwnerId] = useState("");
   const [rawText, setRawText] = useState("");
+  const [subtotalNet, setSubtotalNet] = useState("");
+  const [taxRate, setTaxRate] = useState("0.16");
+  const [taxTotal, setTaxTotal] = useState("");
+  const [totalGross, setTotalGross] = useState("");
+  const [taxTouched, setTaxTouched] = useState(false);
+  const [totalTouched, setTotalTouched] = useState(false);
   const [loadingInvestors, setLoadingInvestors] = useState(true);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<string>("");
@@ -37,6 +43,21 @@ export default function NewPurchasePage() {
     () => round2(previewLines.reduce((acc, line) => acc + Number(line.lineTotalNet || 0), 0)),
     [previewLines],
   );
+  const subtotalValue = toNumber(subtotalNet);
+  const taxRateValue = toNumber(taxRate, 0.16);
+  const autoTax = round2(subtotalValue * taxRateValue);
+  const autoTotal = round2(subtotalValue + autoTax);
+  const taxDiff = round2(Math.abs(toNumber(taxTotal) - autoTax));
+  const totalDiff = round2(Math.abs(toNumber(totalGross) - autoTotal));
+
+  useEffect(() => {
+    if (!taxTouched) {
+      setTaxTotal(subtotalNet ? autoTax.toFixed(2) : "");
+    }
+    if (!totalTouched) {
+      setTotalGross(subtotalNet ? autoTotal.toFixed(2) : "");
+    }
+  }, [subtotalNet, taxRate, taxTouched, totalTouched, autoTax, autoTotal]);
 
   useEffect(() => {
     let cancelled = false;
@@ -85,10 +106,10 @@ export default function NewPurchasePage() {
       supplier: String(form.get("supplier") || ""),
       date: String(form.get("date") || ""),
       invoiceRef: String(form.get("invoiceRef") || ""),
-      subtotalNet: Number(form.get("subtotalNet") || 0),
-      taxTotal: Number(form.get("taxTotal") || 0),
-      totalGross: Number(form.get("totalGross") || 0),
-      taxRate: Number(form.get("taxRate") || 0.16),
+      subtotalNet: toNumber(subtotalNet),
+      taxTotal: toNumber(taxTotal),
+      totalGross: toNumber(totalGross),
+      taxRate: toNumber(taxRate, 0.16),
       rawText,
       defaultOwnerId: selectedOwnerId,
     };
@@ -112,10 +133,49 @@ export default function NewPurchasePage() {
           <label>Proveedor<input name="supplier" required /></label>
           <label>Fecha<input name="date" type="date" required /></label>
           <label>Referencia factura<input name="invoiceRef" /></label>
-          <label>Subtotal neto<input name="subtotalNet" type="number" step="0.01" required /></label>
-          <label>IVA total<input name="taxTotal" type="number" step="0.01" required /></label>
-          <label>Total bruto<input name="totalGross" type="number" step="0.01" required /></label>
-          <label>Tasa IVA<input name="taxRate" type="number" step="0.01" defaultValue="0.16" /></label>
+          <label>
+            Subtotal neto
+            <input
+              name="subtotalNet"
+              type="number"
+              step="0.01"
+              required
+              value={subtotalNet}
+              onChange={(e) => setSubtotalNet(e.target.value)}
+            />
+          </label>
+          <label>
+            IVA total
+            <input
+              name="taxTotal"
+              type="number"
+              step="0.01"
+              required
+              value={taxTotal}
+              onChange={(e) => {
+                setTaxTouched(true);
+                setTaxTotal(e.target.value);
+              }}
+            />
+          </label>
+          <label>
+            Total bruto
+            <input
+              name="totalGross"
+              type="number"
+              step="0.01"
+              required
+              value={totalGross}
+              onChange={(e) => {
+                setTotalTouched(true);
+                setTotalGross(e.target.value);
+              }}
+            />
+          </label>
+          <label>
+            Tasa IVA
+            <input name="taxRate" type="number" step="0.01" value={taxRate} onChange={(e) => setTaxRate(e.target.value)} />
+          </label>
           <label>
             Inversionista
             <select
@@ -131,6 +191,18 @@ export default function NewPurchasePage() {
               ))}
             </select>
           </label>
+        </div>
+        <div className="card" style={{ marginTop: 8, marginBottom: 8 }}>
+          <p style={{ marginTop: 0, marginBottom: 6, fontSize: 13 }}>
+            Cálculo automático: IVA esperado <strong>${formatMoney(autoTax)}</strong> · Total esperado{" "}
+            <strong>${formatMoney(autoTotal)}</strong>
+          </p>
+          {(taxDiff > 0.01 || totalDiff > 0.01) && (
+            <p style={{ margin: 0, fontSize: 13, color: "#b45309" }}>
+              Aviso: los montos capturados difieren del cálculo automático (IVA dif: ${formatMoney(taxDiff)} · Total dif: $
+              {formatMoney(totalDiff)}).
+            </p>
+          )}
         </div>
         <label>
           Texto de factura LS2
@@ -196,4 +268,10 @@ function round2(n: number) {
 
 function formatMoney(n: number) {
   return new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+}
+
+function toNumber(value: string, fallback = 0) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return n;
 }
