@@ -43,6 +43,10 @@ export default function NewPurchasePage() {
     () => round2(previewLines.reduce((acc, line) => acc + Number(line.lineTotalNet || 0), 0)),
     [previewLines],
   );
+  const previewItems = useMemo(
+    () => round2(previewLines.reduce((acc, line) => acc + Number(line.qty || 0), 0)),
+    [previewLines],
+  );
   const subtotalValue = toNumber(subtotalNet);
   const taxRateValue = toNumber(taxRate, 0.16);
   const autoTax = round2(subtotalValue * taxRateValue);
@@ -218,7 +222,8 @@ export default function NewPurchasePage() {
         <div className="card" style={{ marginTop: 8 }}>
           <h3 style={{ marginTop: 0 }}>Vista previa de líneas detectadas</h3>
           <p style={{ marginTop: 0, fontSize: 13 }}>
-            Líneas: <strong>{previewLines.length}</strong> · Subtotal detectado: <strong>${formatMoney(previewSubtotal)}</strong>
+            Líneas: <strong>{previewLines.length}</strong> · Artículos: <strong>{previewItems}</strong> · Subtotal detectado:{" "}
+            <strong>${formatMoney(previewSubtotal)}</strong>
           </p>
           {linePreviewError && <p style={{ color: "crimson", marginTop: 0 }}>{linePreviewError}</p>}
           {!linePreviewError && previewLines.length > 0 && (
