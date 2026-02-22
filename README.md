@@ -68,6 +68,7 @@ Documentación extendida para agentes: `docs/README.md`.
 DATABASE_URL=postgresql://USER:PASS@HOST:PORT/DBNAME?schema=public
 NEXTAUTH_URL=http://localhost:3000
 NEXTAUTH_SECRET=pon_un_secret_largo
+SEED_MODE=dev
 ```
 
 3. Sincronizar schema y generar cliente:
@@ -77,10 +78,11 @@ npx prisma db push
 npm run prisma:generate
 ```
 
-4. Seed inicial (owners + usuarios por rol):
+4. Seed inicial:
 
 ```bash
-npm run prisma:seed
+# Local (demo con usuarios)
+npm run prisma:seed:dev
 ```
 
 Esto crea por defecto:
@@ -90,6 +92,18 @@ Esto crea por defecto:
 - usuario `admin` (rol `ADMIN`)
 - usuario `operador` (rol `OPERADOR`)
 - usuario `inversionista` (rol `INVERSIONISTA`, ligado a `inv_lic`)
+
+Modos de seed:
+
+| `SEED_MODE` | Qué hace | Uso recomendado |
+|---|---|---|
+| `dev` | Crea owners + usuarios demo | Desarrollo local |
+| `bootstrap` | Crea owners base desde `SEED_BOOTSTRAP_OWNERS_JSON`, sin usuarios | Arranque inicial de producción |
+| `safe` | No-op (no crea datos) | Producción por defecto |
+
+Advertencia de seguridad:
+- Nunca usar `SEED_MODE=dev` en producción.
+- En `NODE_ENV=production` sin `SEED_MODE`, el script cae a `safe`.
 
 5. Levantar app:
 
@@ -107,6 +121,9 @@ npm run dev
 - `npm run prisma:migrate`
 - `npm run prisma:studio`
 - `npm run prisma:seed`
+- `npm run prisma:seed:dev`
+- `npm run prisma:seed:bootstrap`
+- `npm run prisma:seed:safe`
 
 ## Rutas UI
 
@@ -185,6 +202,8 @@ Los endpoints `/api/sheets` y `/api/sheets/init` permanecen solo como deprecados
 - `DATABASE_URL`
 - `NEXTAUTH_URL`
 - `NEXTAUTH_SECRET`
+- `SEED_MODE` (`bootstrap` para arranque inicial, luego `safe`)
+- `SEED_BOOTSTRAP_OWNERS_JSON` (cuando `SEED_MODE=bootstrap`)
 
 Opcionales de seed:
 
@@ -197,6 +216,9 @@ Opcionales de seed:
 - `SEED_INVESTOR_ID`
 - `SEED_INVESTOR_NAME`
 - `SEED_MOTOISLA_ID`
+  
+Nota:
+- Variables `SEED_ADMIN_*`, `SEED_OPERATOR_*`, `SEED_INVESTOR_*` aplican solo en `SEED_MODE=dev`.
 
 ### Primer despliegue
 
@@ -204,9 +226,11 @@ Opcionales de seed:
 2. Ejecutar sincronización inicial:
    - `npx prisma db push`
    - `npm run prisma:generate`
-3. Correr seed:
-   - `npm run prisma:seed`
-4. Validar:
+3. Bootstrap de owners (sin usuarios):
+   - `SEED_MODE=bootstrap npm run prisma:seed:bootstrap`
+4. Crear admin principal manualmente (password hasheado, no seed).
+5. Cambiar `SEED_MODE` a `safe`.
+6. Validar:
    - `GET /api/health/db`
    - login en `/login`
 

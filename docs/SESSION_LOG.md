@@ -20,6 +20,11 @@
 - Bloqueo de borrado cuando la venta ya tiene utilidad transferida (`ProfitSplit.status = TRANSFERRED`).
 - Nueva vista `/sales` para gestión y borrado de ventas.
 - Pruebas agregadas: `tests/integration/saleDelete.test.ts`.
+- Seed endurecido con `SEED_MODE`:
+  - `dev`: owners + usuarios demo
+  - `bootstrap`: owners base sin usuarios
+  - `safe`: no-op
+- Política nueva: en producción no se crean usuarios por seed; admin se crea manualmente.
 
 ### Próximos pasos
 

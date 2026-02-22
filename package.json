@@ -11,7 +11,10 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
-    "prisma:seed": "node prisma/seed.js",
+    "prisma:seed": "SEED_MODE=safe node prisma/seed.js",
+    "prisma:seed:dev": "SEED_MODE=dev node prisma/seed.js",
+    "prisma:seed:bootstrap": "SEED_MODE=bootstrap node prisma/seed.js",
+    "prisma:seed:safe": "SEED_MODE=safe node prisma/seed.js",
     "test": "vitest",
     "test:run": "vitest run"
   },
