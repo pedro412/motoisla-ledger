@@ -399,6 +399,8 @@ function labelForMovementType(type: string) {
   if (normalized === "COMPRA") return "Compra (sale capital)";
   if (normalized === "REVERSA_COMPRA") return "Cancelación compra (regresa capital)";
   if (normalized === "VENTA_COSTO") return "Venta (regresa costo a capital)";
+  if (normalized === "APORTE_CAPITAL") return "Aporte externo de capital";
+  if (normalized === "RETIRO_CAPITAL") return "Retiro de capital";
   if (normalized === "UTILIDAD_A_CAPITAL") return "Transferencia de utilidad a capital";
   if (normalized === "CAPITAL_INICIAL") return "Capital inicial";
   if (normalized === "AJUSTE_CAPITAL_INICIAL") return "Ajuste capital inicial";
@@ -410,6 +412,8 @@ function movementBadgeClass(type: string) {
   if (normalized === "COMPRA") return "move-badge-compra";
   if (normalized === "VENTA_COSTO") return "move-badge-venta";
   if (
+    normalized === "APORTE_CAPITAL" ||
+    normalized === "RETIRO_CAPITAL" ||
     normalized === "UTILIDAD_A_CAPITAL" ||
     normalized === "CAPITAL_INICIAL" ||
     normalized === "AJUSTE_CAPITAL_INICIAL" ||
@@ -425,6 +429,8 @@ function movementRowClass(type: string) {
   if (normalized === "COMPRA") return "move-row-compra";
   if (normalized === "VENTA_COSTO") return "move-row-venta";
   if (
+    normalized === "APORTE_CAPITAL" ||
+    normalized === "RETIRO_CAPITAL" ||
     normalized === "UTILIDAD_A_CAPITAL" ||
     normalized === "CAPITAL_INICIAL" ||
     normalized === "AJUSTE_CAPITAL_INICIAL" ||

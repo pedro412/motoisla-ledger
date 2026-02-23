@@ -1,5 +1,33 @@
 # Bitácora de Sesiones
 
+## 2026-02-23
+
+### Hecho
+
+- Se adoptó flujo profesional de cambios DB para producción:
+  - desarrollo con `prisma migrate dev`
+  - producción con `prisma migrate deploy` desde CI/CD
+  - `db push` fuera del flujo de producción
+- Se agregaron scripts npm de migración explícitos:
+  - `prisma:migrate:dev`
+  - `prisma:migrate:deploy`
+  - `prisma:db:push:dev` (solo uso local controlado)
+- Se creó workflow de release en GitHub Actions:
+  - archivo `.github/workflows/release-prod.yml`
+  - corre en `main`
+  - valida secreto `DATABASE_URL_PROD`
+  - ejecuta `prisma migrate deploy` antes de `build`
+- Se actualizó `README.md` con:
+  - runbook de producción con migraciones versionadas
+  - política de no usar `export` manual en laptop para prod
+  - pasos operativos de branch -> migración -> PR -> deploy automático
+
+### Próximos pasos
+
+1. Configurar secreto `DATABASE_URL_PROD` en GitHub.
+2. Verificar primer run de `release-prod.yml` en entorno de staging/prod.
+3. Confirmar rollback operativo ante fallo de migración.
+
 ## 2026-02-22
 
 ### Hecho
@@ -26,6 +54,11 @@
   - `safe`: no-op
 - Política nueva: en producción no se crean usuarios por seed; admin se crea manualmente.
 - Nuevo endpoint/UI para admin: crear usuario de inversionista ligado a `ownerId` desde pantalla de inversionistas.
+- Capital inicial ahora inmutable (endpoint de ajuste deprecado/bloqueado).
+- Nuevo flujo admin para capital externo:
+  - aporte de capital (`APORTE_CAPITAL`)
+  - retiro de capital (`RETIRO_CAPITAL`) con validación de no exceder disponible
+  - movimientos auditables y visibles en dashboard.
 
 ### Próximos pasos
 

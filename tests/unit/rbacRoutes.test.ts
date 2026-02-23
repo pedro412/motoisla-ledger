@@ -9,6 +9,7 @@ describe("rbac routes policy", () => {
     expect(isBlockedPathForInvestor("/api/sales")).toBe(true);
     expect(isBlockedPathForInvestor("/api/users/investor")).toBe(true);
     expect(isBlockedPathForInvestor("/api/investors")).toBe(true);
+    expect(isBlockedPathForInvestor("/api/investors/inv_1/capital/movements")).toBe(true);
     expect(isBlockedPathForInvestor("/api/capital/reconcile")).toBe(true);
     expect(isBlockedPathForInvestor("/api/health/db")).toBe(true);
   });

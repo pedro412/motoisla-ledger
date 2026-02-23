@@ -12,6 +12,7 @@ Documentación extendida para agentes: `docs/README.md`.
 - Flujo base operativo:
   - alta inversionistas y capital inicial
   - alta de usuario por inversionista (admin)
+  - aporte/retiro de capital externo (admin)
   - compra con validación de capital
   - cancelación de compra (auditable, con reversa de capital y bloqueo por ventas existentes)
   - creación de lotes por compra/factura
@@ -72,12 +73,14 @@ NEXTAUTH_SECRET=pon_un_secret_largo
 SEED_MODE=dev
 ```
 
-3. Sincronizar schema y generar cliente:
+3. Crear/aplicar migración local y generar cliente:
 
 ```bash
-npx prisma db push
+npx prisma migrate dev --name init
 npm run prisma:generate
 ```
+
+`db push` queda solo para casos locales excepcionales; el flujo normal usa migraciones versionadas.
 
 4. Seed inicial:
 
@@ -120,6 +123,9 @@ npm run dev
 - `npm run test:run`
 - `npm run prisma:generate`
 - `npm run prisma:migrate`
+- `npm run prisma:migrate:dev`
+- `npm run prisma:migrate:deploy`
+- `npm run prisma:db:push:dev`
 - `npm run prisma:studio`
 - `npm run prisma:seed`
 - `npm run prisma:seed:dev`
@@ -151,8 +157,9 @@ npm run dev
 
 - `GET /api/investors`
 - `POST /api/investors`
-- `PATCH /api/investors/:id/capital`
+- `PATCH /api/investors/:id/capital` (deprecado/bloqueado)
 - `POST /api/users/investor`
+- `POST /api/investors/:id/capital/movements`
 
 ### Compras / lotes / ventas
 
@@ -225,8 +232,8 @@ Nota:
 ### Primer despliegue
 
 1. Configurar variables de entorno en Railway.
-2. Ejecutar sincronización inicial:
-   - `npx prisma db push`
+2. Aplicar migraciones versionadas:
+   - `npx prisma migrate deploy`
    - `npm run prisma:generate`
 3. Bootstrap de owners (sin usuarios):
    - `SEED_MODE=bootstrap npm run prisma:seed:bootstrap`
@@ -241,9 +248,39 @@ Nota:
 1. `npm run test:run`
 2. `npm run typecheck`
 3. `npm run build`
-4. Si cambió `prisma/schema.prisma`, ejecutar `npx prisma db push` en entorno destino.
+4. Si cambió `prisma/schema.prisma`, crear migración en branch (`npx prisma migrate dev --name <cambio>`) y aplicar en destino con `npx prisma migrate deploy`.
 5. Verificar flujos mínimos:
    - compra -> venta -> dashboard -> auditoría
+
+## Flujo profesional de DB en producción
+
+### Política
+
+- Producción usa solo `prisma migrate deploy`.
+- `db push` no se usa en producción (solo emergencia explícita, auditada).
+- `DATABASE_URL` de prod vive en secretos del pipeline (no en laptop ni en `.env.local`).
+
+### Pipeline CI/CD (GitHub Actions)
+
+- Workflow: `.github/workflows/release-prod.yml`
+- Trigger: `push` a `main` o ejecución manual (`workflow_dispatch`).
+- Requiere secreto: `DATABASE_URL_PROD`.
+- Pasos:
+  1. `npm ci`
+  2. `npm run prisma:generate`
+  3. `npm run prisma:migrate:deploy` usando `DATABASE_URL_PROD`
+  4. `npm run build`
+
+Si falla migración, el workflow se detiene y no continúa el release.
+
+### Flujo diario de cambios de schema
+
+1. En feature branch: editar `prisma/schema.prisma`.
+2. Crear migración: `npx prisma migrate dev --name <descripcion>`.
+3. Ejecutar: `npm run prisma:generate`, `npm run test:run`, `npm run typecheck`, `npm run build`.
+4. Commit incluyendo `prisma/migrations/*`.
+5. PR y aprobación.
+6. Merge a `main`; CI aplica `migrate deploy` contra producción.
 
 ## Siguientes pasos
 
