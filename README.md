@@ -273,6 +273,21 @@ Nota:
 
 Si falla migración, el workflow se detiene y no continúa el release.
 
+### Baseline para DB productiva existente (one-time)
+
+Si producción ya tenía tablas creadas antes de versionar migraciones, ejecutar una sola vez:
+
+- Workflow manual: `.github/workflows/baseline-prod.yml`
+- Inputs:
+  - `baseline_migration`: `20260223134500_baseline`
+  - `confirm`: `BASELINE`
+
+Este workflow ejecuta:
+1. `prisma migrate resolve --applied 20260223134500_baseline`
+2. `prisma migrate deploy`
+
+Después de ese baseline inicial, operar normalmente con `release-prod.yml`.
+
 ### Flujo diario de cambios de schema
 
 1. En feature branch: editar `prisma/schema.prisma`.

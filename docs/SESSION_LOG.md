@@ -21,6 +21,10 @@
   - runbook de producción con migraciones versionadas
   - política de no usar `export` manual en laptop para prod
   - pasos operativos de branch -> migración -> PR -> deploy automático
+- Se agregó baseline de migraciones para producción existente:
+  - carpeta `prisma/migrations/20260223134500_baseline`
+  - `prisma/migrations/migration_lock.toml`
+  - workflow manual `.github/workflows/baseline-prod.yml` para marcar baseline aplicado una sola vez.
 
 ### Próximos pasos
 
