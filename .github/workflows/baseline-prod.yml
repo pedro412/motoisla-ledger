@@ -1,0 +1,52 @@
+name: Baseline Production DB
+
+on:
+  workflow_dispatch:
+    inputs:
+      baseline_migration:
+        description: "Migration id to mark as already applied"
+        required: true
+        default: "20260223134500_baseline"
+      confirm:
+        description: "Type BASELINE to continue"
+        required: true
+        default: ""
+
+jobs:
+  baseline:
+    if: ${{ github.event.inputs.confirm == 'BASELINE' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL_PROD }}
+      BASELINE_MIGRATION: ${{ github.event.inputs.baseline_migration }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate required inputs/secrets
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "DATABASE_URL_PROD secret is required."
+            exit 1
+          fi
+          if [ -z "$BASELINE_MIGRATION" ]; then
+            echo "baseline_migration input is required."
+            exit 1
+          fi
+
+      - name: Mark baseline as applied
+        run: npx prisma migrate resolve --applied "$BASELINE_MIGRATION"
+
+      - name: Run migrate deploy after baseline
+        run: npm run prisma:migrate:deploy
