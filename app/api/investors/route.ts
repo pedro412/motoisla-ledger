@@ -33,6 +33,21 @@ export async function GET() {
       orderBy: { createdAt: "asc" },
     });
 
+    const ownerIds = owners.map((o) => o.id);
+    const investorUsers = ownerIds.length
+      ? await db.user.findMany({
+          where: { ownerId: { in: ownerIds }, role: "INVERSIONISTA" },
+          select: { ownerId: true, username: true, createdAt: true },
+          orderBy: { createdAt: "asc" },
+        })
+      : [];
+    const userByOwnerId = new Map<string, string>();
+    for (const u of investorUsers) {
+      if (u.ownerId && !userByOwnerId.has(u.ownerId)) {
+        userByOwnerId.set(u.ownerId, u.username);
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       investors: owners.map((o) => ({
@@ -41,6 +56,7 @@ export async function GET() {
         tipo: o.type,
         capitalInicial: Number(o.initialCapital),
         creadoEn: o.createdAt.toISOString(),
+        usuarioInversionista: userByOwnerId.get(o.id) ?? null,
       })),
     });
   } catch (error) {

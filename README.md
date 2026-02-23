@@ -11,6 +11,7 @@ Documentación extendida para agentes: `docs/README.md`.
 - Migración de backend a PostgreSQL + Prisma (Google Sheets deprecado).
 - Flujo base operativo:
   - alta inversionistas y capital inicial
+  - alta de usuario por inversionista (admin)
   - compra con validación de capital
   - cancelación de compra (auditable, con reversa de capital y bloqueo por ventas existentes)
   - creación de lotes por compra/factura
@@ -151,6 +152,7 @@ npm run dev
 - `GET /api/investors`
 - `POST /api/investors`
 - `PATCH /api/investors/:id/capital`
+- `POST /api/users/investor`
 
 ### Compras / lotes / ventas
 
