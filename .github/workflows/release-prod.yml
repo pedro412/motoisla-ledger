@@ -1,0 +1,47 @@
+name: Release Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: release-prod
+  cancel-in-progress: false
+
+jobs:
+  migrate-and-build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL_PROD }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate DATABASE_URL_PROD secret
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "DATABASE_URL_PROD secret is required for production migrations."
+            exit 1
+          fi
+
+      - name: Generate Prisma Client
+        run: npm run prisma:generate
+
+      - name: Apply migrations (production)
+        run: npm run prisma:migrate:deploy
+
+      - name: Build app
+        run: npm run build

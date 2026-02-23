@@ -16,14 +16,17 @@ type Investor = {
 export default function InvestorsPage() {
   const [investors, setInvestors] = useState<Investor[]>([]);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState("");
-  const [capitalDrafts, setCapitalDrafts] = useState<Record<string, string>>({});
+  const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [newCapitalInicial, setNewCapitalInicial] = useState("0.00");
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [newInvestorUserOwnerId, setNewInvestorUserOwnerId] = useState("");
   const [newInvestorUsername, setNewInvestorUsername] = useState("");
   const [newInvestorPassword, setNewInvestorPassword] = useState("");
   const [newInvestorUserName, setNewInvestorUserName] = useState("");
+  const [movementOwnerId, setMovementOwnerId] = useState("");
+  const [movementType, setMovementType] = useState<"APORTE_CAPITAL" | "RETIRO_CAPITAL">("APORTE_CAPITAL");
+  const [movementAmount, setMovementAmount] = useState("0.00");
+  const [movementMotivo, setMovementMotivo] = useState("");
 
   async function loadInvestors() {
     setLoading(true);
@@ -34,19 +37,9 @@ export default function InvestorsPage() {
       const list = (json.investors as Investor[]) ?? [];
       setInvestors(list);
       setNewInvestorUserOwnerId((prev) => prev || list[0]?.id || "");
-      setCapitalDrafts(
-        Object.fromEntries(
-          list.map((i) => [i.id, String(i.capitalInicial)]),
-        ),
-      );
+      setMovementOwnerId((prev) => prev || list[0]?.id || "");
     } catch (error) {
-      setResult(
-        JSON.stringify(
-          { ok: false, error: error instanceof Error ? error.message : "Error al cargar inversionistas" },
-          null,
-          2,
-        ),
-      );
+      setNotice({ type: "error", message: error instanceof Error ? error.message : "Error al cargar inversionistas" });
     } finally {
       setLoading(false);
     }
@@ -60,7 +53,7 @@ export default function InvestorsPage() {
     event.preventDefault();
     if (pendingAction) return;
     setPendingAction("create");
-    setResult("");
+    setNotice(null);
     const form = new FormData(event.currentTarget);
 
     const payload = {
@@ -76,33 +69,17 @@ export default function InvestorsPage() {
         body: JSON.stringify(payload),
       });
       const json = await res.json();
-      setResult(JSON.stringify(json, null, 2));
-      if (res.ok && json.ok) {
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "No se pudo crear inversionista");
+      }
+      setNotice({ type: "success", message: `Inversionista creado: ${json.ownerId}` });
+      if (res.ok) {
         (event.currentTarget as HTMLFormElement).reset();
         setNewCapitalInicial("0.00");
         await loadInvestors();
       }
-    } finally {
-      setPendingAction(null);
-    }
-  }
-
-  async function updateCapital(ownerId: string) {
-    if (pendingAction) return;
-    setPendingAction(`update:${ownerId}`);
-    setResult("");
-    const nuevoCapitalInicial = Number(capitalDrafts[ownerId] || 0);
-    try {
-      const res = await fetch(`/api/investors/${encodeURIComponent(ownerId)}/capital`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nuevoCapitalInicial, motivo: "Ajuste manual desde UI" }),
-      });
-      const json = await res.json();
-      setResult(JSON.stringify(json, null, 2));
-      if (res.ok && json.ok) {
-        await loadInvestors();
-      }
+    } catch (error) {
+      setNotice({ type: "error", message: error instanceof Error ? error.message : "Error al crear inversionista" });
     } finally {
       setPendingAction(null);
     }
@@ -110,7 +87,7 @@ export default function InvestorsPage() {
 
   async function deleteInvestor(ownerId: string, nombre: string) {
     if (pendingAction) return;
-    setResult("");
+    setNotice(null);
     const typed = window.prompt(
       `Vas a borrar completamente a ${nombre} (${ownerId}).\n` +
         "Esto elimina compras, lotes, ventas relacionadas, movimientos y utilidades.\n" +
@@ -118,7 +95,7 @@ export default function InvestorsPage() {
     );
     if (!typed) return;
     if (typed.trim().toUpperCase() !== "BORRAR") {
-      setResult(JSON.stringify({ ok: false, error: "Confirmación inválida. Debes escribir BORRAR." }, null, 2));
+      setNotice({ type: "error", message: "Confirmación inválida. Debes escribir BORRAR." });
       return;
     }
     setPendingAction(`delete:${ownerId}`);
@@ -130,10 +107,11 @@ export default function InvestorsPage() {
         body: JSON.stringify({ confirmText: typed.trim() }),
       });
       const json = await res.json();
-      setResult(JSON.stringify(json, null, 2));
-      if (res.ok && json.ok) {
-        await loadInvestors();
-      }
+      if (!res.ok || !json.ok) throw new Error(json.error || "No se pudo borrar inversionista");
+      setNotice({ type: "success", message: `Inversionista eliminado: ${ownerId}` });
+      await loadInvestors();
+    } catch (error) {
+      setNotice({ type: "error", message: error instanceof Error ? error.message : "Error al borrar inversionista" });
     } finally {
       setPendingAction(null);
     }
@@ -143,7 +121,7 @@ export default function InvestorsPage() {
     event.preventDefault();
     if (pendingAction) return;
     setPendingAction("create-user");
-    setResult("");
+    setNotice(null);
     try {
       const res = await fetch("/api/users/investor", {
         method: "POST",
@@ -156,13 +134,47 @@ export default function InvestorsPage() {
         }),
       });
       const json = await res.json();
-      setResult(JSON.stringify(json, null, 2));
-      if (res.ok && json.ok) {
-        setNewInvestorUsername("");
-        setNewInvestorPassword("");
-        setNewInvestorUserName("");
-        await loadInvestors();
-      }
+      if (!res.ok || !json.ok) throw new Error(json.error || "No se pudo crear usuario de inversionista");
+      setNotice({ type: "success", message: `Usuario creado: ${json.username}` });
+      setNewInvestorUsername("");
+      setNewInvestorPassword("");
+      setNewInvestorUserName("");
+      await loadInvestors();
+    } catch (error) {
+      setNotice({ type: "error", message: error instanceof Error ? error.message : "Error al crear usuario" });
+    } finally {
+      setPendingAction(null);
+    }
+  }
+
+  async function createCapitalMovement(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (pendingAction) return;
+    setPendingAction("capital-move");
+    setNotice(null);
+    try {
+      const res = await fetch(`/api/investors/${encodeURIComponent(movementOwnerId)}/capital/movements`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: movementType,
+          amount: Number(movementAmount || 0),
+          motivo: movementMotivo.trim() || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) throw new Error(json.error || "No se pudo registrar movimiento de capital");
+      setNotice({
+        type: "success",
+        message: `${movementType === "APORTE_CAPITAL" ? "Aporte" : "Retiro"} registrado. Capital actual: $${formatMoney(
+          Number(json.currentCapitalAfter ?? 0),
+        )}`,
+      });
+      setMovementAmount("0.00");
+      setMovementMotivo("");
+      await loadInvestors();
+    } catch (error) {
+      setNotice({ type: "error", message: error instanceof Error ? error.message : "Error registrando movimiento" });
     } finally {
       setPendingAction(null);
     }
@@ -170,6 +182,19 @@ export default function InvestorsPage() {
 
   return (
     <section>
+      {notice && (
+        <div
+          className="card"
+          style={{
+            background: notice.type === "success" ? "#ecfdf5" : "#fef2f2",
+            borderColor: notice.type === "success" ? "#86efac" : "#fecaca",
+            color: notice.type === "success" ? "#166534" : "#991b1b",
+          }}
+        >
+          {notice.message}
+        </div>
+      )}
+
       <div className="card">
         <h1>Inversionistas</h1>
         <form onSubmit={onCreate}>
@@ -205,7 +230,7 @@ export default function InvestorsPage() {
                 <th>Tipo</th>
                 <th>Usuario inversionista</th>
                 <th>Capital inicial</th>
-                <th>Acciones</th>
+                <th>Acciones admin</th>
               </tr>
             </thead>
             <tbody>
@@ -215,28 +240,9 @@ export default function InvestorsPage() {
                   <td>{inv.nombre}</td>
                   <td>{inv.tipo}</td>
                   <td>{inv.usuarioInversionista || <span style={{ color: "#64748b" }}>Sin usuario</span>}</td>
-                  <td>
-                    <MoneyInput
-                      value={capitalDrafts[inv.id] ?? String(inv.capitalInicial)}
-                      onValueChange={(next) =>
-                        setCapitalDrafts((prev) => ({
-                          ...prev,
-                          [inv.id]: next,
-                        }))
-                      }
-                    />
-                  </td>
+                  <td>${formatMoney(inv.capitalInicial)}</td>
                   <td>
                     <div style={{ display: "flex", gap: 8 }}>
-                      <LoadingButton
-                        type="button"
-                        disabled={!!pendingAction}
-                        onClick={() => updateCapital(inv.id)}
-                        loading={pendingAction === `update:${inv.id}`}
-                        loadingText="Guardando..."
-                      >
-                        Guardar capital
-                      </LoadingButton>
                       <LoadingButton
                         type="button"
                         variant="danger"
@@ -319,11 +325,54 @@ export default function InvestorsPage() {
         </form>
       </div>
 
-      {result && (
-        <div className="card">
-          <pre>{result}</pre>
-        </div>
-      )}
+      <div className="card">
+        <h2>Movimientos de capital externo</h2>
+        <form onSubmit={createCapitalMovement}>
+          <div className="grid">
+            <label>
+              Inversionista
+              <select value={movementOwnerId} onChange={(e) => setMovementOwnerId(e.target.value)} required>
+                {investors.map((inv) => (
+                  <option key={inv.id} value={inv.id}>
+                    {inv.nombre} ({inv.id})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Tipo de movimiento
+              <select value={movementType} onChange={(e) => setMovementType(e.target.value as "APORTE_CAPITAL" | "RETIRO_CAPITAL")}>
+                <option value="APORTE_CAPITAL">Aporte de capital</option>
+                <option value="RETIRO_CAPITAL">Retiro de capital</option>
+              </select>
+            </label>
+            <label>
+              Monto
+              <MoneyInput value={movementAmount} onValueChange={setMovementAmount} required />
+            </label>
+            <label>
+              Motivo (opcional)
+              <input value={movementMotivo} onChange={(e) => setMovementMotivo(e.target.value)} />
+            </label>
+          </div>
+          <LoadingButton
+            type="submit"
+            disabled={!!pendingAction || investors.length === 0}
+            loading={pendingAction === "capital-move"}
+            loadingText="Registrando..."
+          >
+            Registrar movimiento
+          </LoadingButton>
+        </form>
+      </div>
+
     </section>
   );
+}
+
+function formatMoney(n: number) {
+  return new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(n);
 }
