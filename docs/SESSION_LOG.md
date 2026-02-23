@@ -25,6 +25,7 @@
   - `bootstrap`: owners base sin usuarios
   - `safe`: no-op
 - Política nueva: en producción no se crean usuarios por seed; admin se crea manualmente.
+- Nuevo endpoint/UI para admin: crear usuario de inversionista ligado a `ownerId` desde pantalla de inversionistas.
 
 ### Próximos pasos
 

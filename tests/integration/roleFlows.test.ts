@@ -11,6 +11,9 @@ const dbMocks = vi.hoisted(() => ({
     findMany: vi.fn(),
     findFirst: vi.fn(),
   },
+  user: {
+    findMany: vi.fn(),
+  },
   lot: {
     findMany: vi.fn(),
   },
@@ -47,6 +50,7 @@ describe("role flows integration", () => {
       { id: "inv_1", name: "Inv 1", type: "INVESTOR", initialCapital: 1000, createdAt: new Date("2026-01-01") },
       { id: "inv_2", name: "Inv 2", type: "INVESTOR", initialCapital: 2000, createdAt: new Date("2026-01-02") },
     ]);
+    dbMocks.user.findMany.mockResolvedValue([]);
 
     const res = await investorsGet();
     const json = await res.json();
@@ -67,6 +71,7 @@ describe("role flows integration", () => {
     dbMocks.owner.findMany.mockResolvedValue([
       { id: "inv_1", name: "Inv 1", type: "INVESTOR", initialCapital: 1000, createdAt: new Date("2026-01-01") },
     ]);
+    dbMocks.user.findMany.mockResolvedValue([]);
 
     const res = await investorsGet();
     const json = await res.json();

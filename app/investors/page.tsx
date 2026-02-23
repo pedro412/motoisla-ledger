@@ -10,6 +10,7 @@ type Investor = {
   tipo: "INVESTOR" | "MOTOISLA";
   capitalInicial: number;
   creadoEn: string;
+  usuarioInversionista?: string | null;
 };
 
 export default function InvestorsPage() {
@@ -19,6 +20,10 @@ export default function InvestorsPage() {
   const [capitalDrafts, setCapitalDrafts] = useState<Record<string, string>>({});
   const [newCapitalInicial, setNewCapitalInicial] = useState("0.00");
   const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [newInvestorUserOwnerId, setNewInvestorUserOwnerId] = useState("");
+  const [newInvestorUsername, setNewInvestorUsername] = useState("");
+  const [newInvestorPassword, setNewInvestorPassword] = useState("");
+  const [newInvestorUserName, setNewInvestorUserName] = useState("");
 
   async function loadInvestors() {
     setLoading(true);
@@ -28,6 +33,7 @@ export default function InvestorsPage() {
       if (!res.ok || !json.ok) throw new Error(json.error || "No se pudieron cargar inversionistas");
       const list = (json.investors as Investor[]) ?? [];
       setInvestors(list);
+      setNewInvestorUserOwnerId((prev) => prev || list[0]?.id || "");
       setCapitalDrafts(
         Object.fromEntries(
           list.map((i) => [i.id, String(i.capitalInicial)]),
@@ -133,6 +139,35 @@ export default function InvestorsPage() {
     }
   }
 
+  async function createInvestorUser(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (pendingAction) return;
+    setPendingAction("create-user");
+    setResult("");
+    try {
+      const res = await fetch("/api/users/investor", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ownerId: newInvestorUserOwnerId,
+          username: newInvestorUsername.trim(),
+          password: newInvestorPassword,
+          name: newInvestorUserName.trim() || undefined,
+        }),
+      });
+      const json = await res.json();
+      setResult(JSON.stringify(json, null, 2));
+      if (res.ok && json.ok) {
+        setNewInvestorUsername("");
+        setNewInvestorPassword("");
+        setNewInvestorUserName("");
+        await loadInvestors();
+      }
+    } finally {
+      setPendingAction(null);
+    }
+  }
+
   return (
     <section>
       <div className="card">
@@ -168,6 +203,7 @@ export default function InvestorsPage() {
                 <th>ID</th>
                 <th>Nombre</th>
                 <th>Tipo</th>
+                <th>Usuario inversionista</th>
                 <th>Capital inicial</th>
                 <th>Acciones</th>
               </tr>
@@ -178,6 +214,7 @@ export default function InvestorsPage() {
                   <td>{inv.id}</td>
                   <td>{inv.nombre}</td>
                   <td>{inv.tipo}</td>
+                  <td>{inv.usuarioInversionista || <span style={{ color: "#64748b" }}>Sin usuario</span>}</td>
                   <td>
                     <MoneyInput
                       value={capitalDrafts[inv.id] ?? String(inv.capitalInicial)}
@@ -217,12 +254,69 @@ export default function InvestorsPage() {
               ))}
               {!investors.length && (
                 <tr>
-                  <td colSpan={5}>Sin inversionistas.</td>
+                  <td colSpan={6}>Sin inversionistas.</td>
                 </tr>
               )}
             </tbody>
           </table>
         )}
+      </div>
+
+      <div className="card">
+        <h2>Crear usuario para inversionista</h2>
+        <form onSubmit={createInvestorUser}>
+          <div className="grid">
+            <label>
+              Inversionista
+              <select
+                value={newInvestorUserOwnerId}
+                onChange={(e) => setNewInvestorUserOwnerId(e.target.value)}
+                required
+              >
+                {investors.map((inv) => (
+                  <option key={inv.id} value={inv.id}>
+                    {inv.nombre} ({inv.id})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Username
+              <input
+                value={newInvestorUsername}
+                onChange={(e) => setNewInvestorUsername(e.target.value)}
+                placeholder="inversionista.lic"
+                required
+              />
+            </label>
+            <label>
+              Password
+              <input
+                type="password"
+                value={newInvestorPassword}
+                onChange={(e) => setNewInvestorPassword(e.target.value)}
+                minLength={8}
+                required
+              />
+            </label>
+            <label>
+              Nombre (opcional)
+              <input
+                value={newInvestorUserName}
+                onChange={(e) => setNewInvestorUserName(e.target.value)}
+                placeholder="Nombre visible"
+              />
+            </label>
+          </div>
+          <LoadingButton
+            type="submit"
+            disabled={!!pendingAction || investors.length === 0}
+            loading={pendingAction === "create-user"}
+            loadingText="Creando usuario..."
+          >
+            Crear usuario inversionista
+          </LoadingButton>
+        </form>
       </div>
 
       {result && (
