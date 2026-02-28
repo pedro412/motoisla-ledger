@@ -36,8 +36,10 @@ export default async function DashboardPage({
 
   const owners = await db.owner.findMany({ orderBy: { createdAt: "asc" } });
   const investorOwners = owners.filter((o) => o.type === OwnerType.INVESTOR);
-  const requestedOwnerId = searchParams?.ownerId ?? investorOwners[0]?.id ?? owners[0]?.id ?? "";
-  const selectedOwnerId = isInvestor(user) ? user.ownerId ?? "" : requestedOwnerId;
+  const requestedOwnerId = searchParams?.ownerId;
+  const selectedOwnerId = isInvestor(user)
+    ? user.ownerId ?? ""
+    : requestedOwnerId ?? investorOwners[0]?.id ?? owners[0]?.id ?? "";
 
   if (requestedOwnerId && !canAccessOwner(user, requestedOwnerId)) {
     return (

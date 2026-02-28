@@ -74,6 +74,22 @@
 
 - `npm run build` sigue fallando por un problema existente de prerender/chunks en `.next` (no originado por este cambio).
 
+## 2026-02-28
+
+### Hecho
+
+- Nuevo endpoint admin para resetear password de usuario inversionista: `POST /api/users/investor/reset-password`.
+- Pantalla `Inversionistas` ahora muestra el `username` actual y permite resetear la contraseña con validación de confirmación.
+- Fix en `/dashboard` para usuarios `INVERSIONISTA`:
+  - al entrar sin `ownerId` en query, usa su `ownerId` de sesión
+  - evita falso positivo de "No tienes acceso al inversionista solicitado."
+- Pruebas agregadas: `tests/integration/investorUserResetPassword.test.ts`.
+
+### Riesgos/Notas
+
+- La contraseña actual nunca se expone; solo se reemplaza el `passwordHash`.
+- El flujo asume un solo usuario `INVERSIONISTA` por `ownerId`; si existen duplicados, actualiza el más antiguo.
+
 ### Nota operativa
 
 Al terminar cada nueva sesión, agregar una nueva entrada con:

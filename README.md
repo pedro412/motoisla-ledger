@@ -159,6 +159,7 @@ npm run dev
 - `POST /api/investors`
 - `PATCH /api/investors/:id/capital` (deprecado/bloqueado)
 - `POST /api/users/investor`
+- `POST /api/users/investor/reset-password`
 - `POST /api/investors/:id/capital/movements`
 
 ### Compras / lotes / ventas

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { MoneyInput } from "@/components/ui/money-input";
 import { LoadingButton } from "@/components/ui/loading-button";
 
@@ -23,10 +23,14 @@ export default function InvestorsPage() {
   const [newInvestorUsername, setNewInvestorUsername] = useState("");
   const [newInvestorPassword, setNewInvestorPassword] = useState("");
   const [newInvestorUserName, setNewInvestorUserName] = useState("");
+  const [resetOwnerId, setResetOwnerId] = useState("");
+  const [resetPassword, setResetPassword] = useState("");
+  const [resetPasswordConfirm, setResetPasswordConfirm] = useState("");
   const [movementOwnerId, setMovementOwnerId] = useState("");
   const [movementType, setMovementType] = useState<"APORTE_CAPITAL" | "RETIRO_CAPITAL">("APORTE_CAPITAL");
   const [movementAmount, setMovementAmount] = useState("0.00");
   const [movementMotivo, setMovementMotivo] = useState("");
+  const resetPasswordSectionRef = useRef<HTMLDivElement | null>(null);
 
   async function loadInvestors() {
     setLoading(true);
@@ -37,6 +41,7 @@ export default function InvestorsPage() {
       const list = (json.investors as Investor[]) ?? [];
       setInvestors(list);
       setNewInvestorUserOwnerId((prev) => prev || list[0]?.id || "");
+      setResetOwnerId((prev) => prev || list.find((inv) => !!inv.usuarioInversionista)?.id || list[0]?.id || "");
       setMovementOwnerId((prev) => prev || list[0]?.id || "");
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Error al cargar inversionistas" });
@@ -180,6 +185,60 @@ export default function InvestorsPage() {
     }
   }
 
+  function selectInvestorForPasswordReset(ownerId: string) {
+    setResetOwnerId(ownerId);
+    resetPasswordSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  async function resetInvestorPassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (pendingAction) return;
+    setNotice(null);
+
+    if (!resetOwnerId) {
+      setNotice({ type: "error", message: "Selecciona un inversionista para cambiar la contraseña." });
+      return;
+    }
+
+    const selectedInvestor = investors.find((inv) => inv.id === resetOwnerId);
+    if (!selectedInvestor?.usuarioInversionista) {
+      setNotice({ type: "error", message: "Este inversionista no tiene usuario creado." });
+      return;
+    }
+
+    if (resetPassword.length < 8 || resetPassword.length > 100) {
+      setNotice({ type: "error", message: "La nueva contraseña debe tener entre 8 y 100 caracteres." });
+      return;
+    }
+
+    if (resetPassword !== resetPasswordConfirm) {
+      setNotice({ type: "error", message: "La confirmación de contraseña no coincide." });
+      return;
+    }
+
+    setPendingAction("reset-password");
+    try {
+      const res = await fetch("/api/users/investor/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ownerId: resetOwnerId,
+          password: resetPassword,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) throw new Error(json.error || "No se pudo actualizar la contraseña");
+      setNotice({ type: "success", message: `Password actualizada para ${json.username}` });
+      setResetPassword("");
+      setResetPasswordConfirm("");
+      await loadInvestors();
+    } catch (error) {
+      setNotice({ type: "error", message: error instanceof Error ? error.message : "Error actualizando password" });
+    } finally {
+      setPendingAction(null);
+    }
+  }
+
   return (
     <section>
       {notice && (
@@ -243,6 +302,14 @@ export default function InvestorsPage() {
                   <td>${formatMoney(inv.capitalInicial)}</td>
                   <td>
                     <div style={{ display: "flex", gap: 8 }}>
+                      <LoadingButton
+                        type="button"
+                        disabled={!!pendingAction || !inv.usuarioInversionista}
+                        onClick={() => selectInvestorForPasswordReset(inv.id)}
+                        loading={false}
+                      >
+                        Cambiar contraseña
+                      </LoadingButton>
                       <LoadingButton
                         type="button"
                         variant="danger"
@@ -321,6 +388,63 @@ export default function InvestorsPage() {
             loadingText="Creando usuario..."
           >
             Crear usuario inversionista
+          </LoadingButton>
+        </form>
+      </div>
+
+      <div className="card" ref={resetPasswordSectionRef}>
+        <h2>Cambiar contraseña de usuario inversionista</h2>
+        <form onSubmit={resetInvestorPassword}>
+          <div className="grid">
+            <label>
+              Inversionista
+              <select value={resetOwnerId} onChange={(e) => setResetOwnerId(e.target.value)} required>
+                {investors.map((inv) => (
+                  <option key={inv.id} value={inv.id}>
+                    {inv.nombre} ({inv.id})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Username actual
+              <input
+                value={investors.find((inv) => inv.id === resetOwnerId)?.usuarioInversionista || ""}
+                placeholder="Sin usuario"
+                readOnly
+                disabled
+              />
+            </label>
+            <label>
+              Nueva contraseña
+              <input
+                type="password"
+                value={resetPassword}
+                onChange={(e) => setResetPassword(e.target.value)}
+                minLength={8}
+                maxLength={100}
+                required
+              />
+            </label>
+            <label>
+              Confirmar contraseña
+              <input
+                type="password"
+                value={resetPasswordConfirm}
+                onChange={(e) => setResetPasswordConfirm(e.target.value)}
+                minLength={8}
+                maxLength={100}
+                required
+              />
+            </label>
+          </div>
+          <LoadingButton
+            type="submit"
+            disabled={!!pendingAction || investors.length === 0}
+            loading={pendingAction === "reset-password"}
+            loadingText="Actualizando..."
+          >
+            Actualizar contraseña
           </LoadingButton>
         </form>
       </div>
