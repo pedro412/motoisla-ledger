@@ -29,6 +29,7 @@ Sistema de control financiero para tienda con trazabilidad por inversionista:
 - Dashboard por inversionista.
 - Inventario por factura/lote (oculta canceladas por defecto, con toggle).
 - Auditoría (`/auditoria`) con `AuditLog`.
+- Admin puede crear usuario de inversionista y resetear su contraseña desde `Inversionistas`.
 - RBAC:
   - `ADMIN`
   - `OPERADOR`
