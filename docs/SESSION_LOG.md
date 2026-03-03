@@ -1,5 +1,26 @@
 # Bitácora de Sesiones
 
+## 2026-03-03
+
+### Hecho
+
+- Se corrigió el modal de transferencia de utilidad en dashboard:
+  - advertencia inmediata al capturar un monto parcial inválido
+  - bloqueo del botón de confirmación cuando el monto es `<= 0` o excede lo disponible
+  - el frontend ahora envía el monto explícito incluso en "transferir todo"
+- Se evitó el comportamiento visual "encapsulado" del modal dentro de la tarjeta de capital:
+  - se anuló el `transform` en hover para `.kpi-capital`, evitando que el overlay fixed quede contenido por esa tarjeta
+- Se actualizó `README.md` con la nota de validación en tiempo real para transferencia parcial.
+
+### Riesgos/Notas
+
+- El flujo sigue permitiendo transferir toda la utilidad disponible cuando el usuario elige explícitamente esa opción; este cambio sólo endurece validación y feedback en UI.
+
+### Próximos pasos
+
+1. Agregar reversa auditada de `UTILIDAD_A_CAPITAL` para corregir transferencias hechas por error desde la UI.
+2. Cubrir este caso con pruebas del componente o integración del flujo de transferencia.
+
 ## 2026-02-23
 
 ### Hecho
