@@ -11,12 +11,20 @@ export function TransferProfitButton({ ownerId, available }: { ownerId: string; 
   const [mode, setMode] = useState<"all" | "partial">("all");
   const [amount, setAmount] = useState("");
   const router = useRouter();
+  const parsedAmount = Number(amount || 0);
+  const partialAmountInvalid =
+    mode === "partial" && (!Number.isFinite(parsedAmount) || parsedAmount <= 0 || parsedAmount > available);
+  const partialAmountWarning =
+    mode === "partial" && parsedAmount > available
+      ? `El monto excede la utilidad disponible (${formatMoney(available)}).`
+      : mode === "partial" && amount !== "" && (!Number.isFinite(parsedAmount) || parsedAmount <= 0)
+        ? "El monto debe ser mayor a 0."
+        : "";
 
   async function transfer() {
     if (available <= 0) return;
-    const parsedAmount = Number(amount || 0);
-    const selectedAmount = mode === "all" ? undefined : parsedAmount;
-    if (mode === "partial" && (!Number.isFinite(parsedAmount) || parsedAmount <= 0 || parsedAmount > available)) {
+    const selectedAmount = mode === "all" ? available : parsedAmount;
+    if (partialAmountInvalid) {
       setMsg(`Monto inválido. Debe ser mayor a 0 y menor o igual a ${formatMoney(available)}.`);
       return;
     }
@@ -96,6 +104,9 @@ export function TransferProfitButton({ ownerId, available }: { ownerId: string; 
                   onChange={(e) => setAmount(e.target.value)}
                 />
               </label>
+              {partialAmountWarning && (
+                <p style={{ margin: 0, fontSize: 13, color: "#b45309" }}>{partialAmountWarning}</p>
+              )}
             </div>
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button
@@ -108,7 +119,13 @@ export function TransferProfitButton({ ownerId, available }: { ownerId: string; 
               >
                 Cancelar
               </button>
-              <LoadingButton type="button" onClick={transfer} loading={loading} loadingText="Transfiriendo...">
+              <LoadingButton
+                type="button"
+                onClick={transfer}
+                loading={loading}
+                loadingText="Transfiriendo..."
+                disabled={partialAmountInvalid}
+              >
                 Aceptar y transferir
               </LoadingButton>
             </div>

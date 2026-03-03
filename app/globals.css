@@ -128,6 +128,10 @@
     @apply border-l-sky-600;
   }
 
+  .kpi-capital:hover {
+    transform: none;
+  }
+
   .kpi-alert {
     @apply border-l-rose-600;
   }

@@ -37,6 +37,7 @@ Documentación extendida para agentes: `docs/README.md`.
   - dashboard con gráficas (Recharts)
   - login limpio (sin menú)
   - botones de acción con estado loading + spinner
+  - validación en tiempo real en transferencia parcial de utilidad (warning + bloqueo de confirmación si excede lo disponible)
   - mensajes de éxito/error amigables en formularios de compra/venta
   - refresco visual de dashboard tras operaciones críticas
 
