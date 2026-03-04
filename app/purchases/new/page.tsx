@@ -187,6 +187,7 @@ export default function NewPurchasePage() {
             <select value={invoiceFormat} onChange={(e) => setInvoiceFormat(e.target.value as InvoiceFormat)}>
               <option value="LS2">LS2</option>
               <option value="EDGE">EDGE</option>
+              <option value="JOE_ROCKET">JOE ROCKET</option>
             </select>
           </label>
           <label>Fecha<input name="date" type="date" required /></label>
