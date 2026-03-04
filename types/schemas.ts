@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const PurchaseImportSchema = z.object({
   supplier: z.string().min(1),
-  invoiceFormat: z.enum(["LS2", "EDGE"]).default("LS2"),
+  invoiceFormat: z.enum(["LS2", "EDGE", "JOE_ROCKET"]).default("LS2"),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   invoiceRef: z.string().optional().default(""),
   subtotalNet: z.number().nonnegative(),
