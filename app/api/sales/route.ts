@@ -8,6 +8,8 @@ import { SaleCreateSchema } from "@/types/schemas";
 import { getSessionUser, isStaff } from "@/lib/authz";
 import { logAudit } from "@/lib/audit";
 import { revalidateUiPaths } from "@/lib/revalidate";
+import { getOpexRate } from "@/lib/settings";
+import { computeOpexDeduction } from "@/lib/domain/ledgerMath";
 
 export async function POST(req: Request) {
   try {
@@ -56,6 +58,7 @@ export async function POST(req: Request) {
     }
 
     const commissionRate = getCommissionRate(body.terminalPayment, body.threeMonthsNoInterest);
+    const opexRate = await getOpexRate();
     const computedLines = body.lines.map((line) => {
       const lot = lotMap.get(line.lotId);
       if (!lot) {
@@ -130,6 +133,7 @@ export async function POST(req: Request) {
 
         const investorShare = round2(cl.profit * 0.5);
         const motoIslaShare = round2(cl.profit * 0.5);
+        const opexDed = computeOpexDeduction(cl.grossRevenue, opexRate);
 
         await tx.profitSplit.create({
           data: {
@@ -138,6 +142,8 @@ export async function POST(req: Request) {
             saleLineId,
             ownerId: cl.ownerId,
             profitShareGross: dec(investorShare),
+            opexRate: dec6(opexRate),
+            opexDeduction: dec(opexDed),
             status: "ACCRUED",
             createdAt: new Date(createdAt),
           },
@@ -149,6 +155,8 @@ export async function POST(req: Request) {
             saleLineId,
             ownerId: motoIslaOwnerId,
             profitShareGross: dec(motoIslaShare),
+            opexRate: dec6(opexRate),
+            opexDeduction: dec(opexDed),
             status: "ACCRUED",
             createdAt: new Date(createdAt),
           },

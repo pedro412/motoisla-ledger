@@ -1,5 +1,6 @@
 import {
   computeCurrentCapital,
+  computeOpexDeduction,
   computeSaleLine,
   getAvailableProfitToTransfer,
   getCommissionRate,
@@ -50,5 +51,11 @@ describe("ledgerMath unit", () => {
     const split = splitProfit50_50(101.23);
     expect(split.investor).toBe(50.62);
     expect(split.motoIsla).toBe(50.62);
+  });
+
+  it("computes opex deduction per owner", () => {
+    expect(computeOpexDeduction(1000, 0.175)).toBe(87.5); // 1000 × 0.175 × 0.5
+    expect(computeOpexDeduction(0, 0.175)).toBe(0);
+    expect(computeOpexDeduction(1000, 0)).toBe(0);
   });
 });

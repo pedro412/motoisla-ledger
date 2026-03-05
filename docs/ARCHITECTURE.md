@@ -36,26 +36,38 @@
 
 1. Valida stock por lote activo.
 2. Calcula comisión (0%, 2%, 5.58%).
-3. Crea `Sale` + `SaleLine`.
-4. Crea `ProfitSplit` (hoy 50/50).
-5. Crea `CapitalMovement` tipo `VENTA_COSTO`.
-6. Registra auditoría.
+3. Lee `opexRate` desde `SystemSetting` (`lib/settings.ts → getOpexRate()`).
+4. Crea `Sale` + `SaleLine`.
+5. Crea `ProfitSplit` (50/50) con `opexRate` y `opexDeduction = grossRevenue × opexRate × 0.5`.
+6. Crea `CapitalMovement` tipo `VENTA_COSTO`.
+7. Registra auditoría.
 
 ## Cálculos financieros
 
 - Capital actual = capital inicial + suma movimientos capital.
 - Inventario = suma costo de lotes activos no vendidos.
-- Utilidad acumulada = suma `ProfitSplit` por owner.
-- Utilidad disponible a transferir = utilidad acumulada - transferido.
+- Utilidad acumulada neta = suma(`profitShareGross` − `opexDeduction`) por owner (`NULL` → `0`).
+- Utilidad disponible a transferir = utilidad acumulada neta − transferido.
+
+## Configuración del sistema (`/settings`)
+
+- Modelo `SystemSetting`: pares `key/value` persistidos en DB.
+- `lib/settings.ts`: helpers `getSetting`, `getOpexRate`, `setSetting`.
+- `GET/PATCH /api/settings`: solo `ADMIN`; PATCH audita con entity `SETTING`.
+- `INVERSIONISTA` bloqueado en middleware y `rbacRoutes`.
 
 ## Archivos clave
 
 - `app/api/purchases/route.ts`
 - `app/api/purchases/[id]/cancel/route.ts`
 - `app/api/sales/route.ts`
+- `app/api/settings/route.ts`
 - `app/dashboard/page.tsx`
+- `app/settings/page.tsx`
 - `app/inventario/page.tsx`
 - `lib/capital.ts`
+- `lib/settings.ts`
 - `lib/audit.ts`
 - `lib/authz.ts`
+- `lib/domain/ledgerMath.ts`
 - `prisma/schema.prisma`

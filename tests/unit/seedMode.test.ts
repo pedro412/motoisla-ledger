@@ -4,6 +4,7 @@ function makePrismaMock() {
   return {
     owner: { upsert: vi.fn().mockResolvedValue(null) },
     user: { upsert: vi.fn().mockResolvedValue(null) },
+    systemSetting: { upsert: vi.fn().mockResolvedValue(null) },
   };
 }
 

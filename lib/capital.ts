@@ -141,9 +141,9 @@ export function isInitialOrAdjustMovementType(type: CapitalMovementType) {
 async function getOwnerAccruedProfit(ownerId: string) {
   const aggregate = await db.profitSplit.aggregate({
     where: { ownerId },
-    _sum: { profitShareGross: true },
+    _sum: { profitShareGross: true, opexDeduction: true },
   });
-  return round2(toNumber(aggregate._sum.profitShareGross));
+  return round2(toNumber(aggregate._sum.profitShareGross) - toNumber(aggregate._sum.opexDeduction));
 }
 
 export async function appendCapitalMovement(params: {
