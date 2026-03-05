@@ -1,11 +1,12 @@
 "use client";
 
+import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Boxes, ChartNoAxesCombined, HandCoins, PackagePlus, ReceiptText, ScrollText, ShoppingBag, Users } from "lucide-react";
+import { Boxes, ChartNoAxesCombined, HandCoins, PackagePlus, ReceiptText, ScrollText, Settings2, ShoppingBag, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const items = [
+const items: { href: string; label: string; icon: React.ElementType; adminOnly?: boolean }[] = [
   { href: "/dashboard", label: "Dashboard", icon: ChartNoAxesCombined },
   { href: "/investors", label: "Inversionistas", icon: Users },
   { href: "/inventario", label: "Inventario", icon: Boxes },
@@ -14,6 +15,7 @@ const items = [
   { href: "/sales", label: "Ventas", icon: ShoppingBag },
   { href: "/auditoria", label: "Auditoría", icon: ScrollText },
   { href: "/api/health/db", label: "Estado DB", icon: ReceiptText },
+  { href: "/settings", label: "Configuración", icon: Settings2, adminOnly: true },
 ];
 
 export function ShellNav({ role }: { role?: string | null }) {
@@ -26,6 +28,7 @@ export function ShellNav({ role }: { role?: string | null }) {
           if (role === "INVERSIONISTA") {
             return item.href === "/dashboard" || item.href === "/inventario" || item.href === "/auditoria";
           }
+          if (item.adminOnly && role !== "ADMIN") return false;
           return true;
         })
         .map((item) => {

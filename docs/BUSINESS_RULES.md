@@ -29,6 +29,22 @@
 - Reparto actual: `50/50` inversionista vs MotoIsla.
 - Transferencia de utilidad a capital permitida (total o parcial), auditable.
 
+## Gastos operativos (opex)
+
+- Se aplica una **tasa fija configurable** (`opex_rate`, default `17.5%`) sobre las ventas brutas de cada línea de venta.
+- Fórmula por línea por owner: `opexDeduction = grossRevenue × opexRate × 0.5`
+- El campo `opexDeduction` se guarda en `ProfitSplit` junto con la `opexRate` vigente al momento de la venta.
+- **Utilidad neta del inversionista** = `profitShareGross − opexDeduction`
+- Registros históricos (`opexDeduction = NULL`) se tratan como `0` → sin impacto en datos pasados.
+- El endpoint `POST /api/sales/recalculate` **no** aplica opex (preserva comportamiento histórico).
+- Solo `ADMIN` puede modificar la tasa desde `/settings` (audita en `AuditLog` con entity `SETTING`).
+
+## Configuración del sistema
+
+- Modelo `SystemSetting` guarda pares `key/value` configurables por admin.
+- Clave disponible: `opex_rate` (número entre 0 y 1).
+- Cambios se registran en `AuditLog` con `entity: SETTING`, `action: "setting.updated"`.
+
 ## RBAC
 
 - `ADMIN`: control total.

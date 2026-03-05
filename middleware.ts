@@ -46,5 +46,9 @@ export const config = {
     "/api/purchases/:path*",
     "/api/sales/:path*",
     "/api/capital/:path*",
+    "/settings",
+    "/settings/:path*",
+    "/api/settings",
+    "/api/settings/:path*",
   ],
 };
