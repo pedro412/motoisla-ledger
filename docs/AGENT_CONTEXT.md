@@ -25,11 +25,14 @@ Sistema de control financiero para tienda con trazabilidad por inversionista:
   - marca compra/lotes como `CANCELLED`
   - crea reversa de capital (`REVERSA_COMPRA`)
 - Venta con validación de stock y comisiones terminal.
+- Nueva venta con selector de lote enriquecido (`lotId | SKU | descripción | disponibilidad | owner`) para facilitar captura.
 - **Gastos operativos configurables**: tasa fija (`opex_rate`) aplicada sobre ventas brutas; `opexDeduction` guardado por `ProfitSplit`; utilidad neta = `profitShareGross − opexDeduction`.
-- Transferencia de utilidad a capital (usa utilidad neta después de opex).
+- Transferencia de utilidad a capital.
 - Dashboard por inversionista con desglose opex y tooltip de cálculo exacto por venta.
+- Movimientos de capital (`VENTA_COSTO`) con ícono + tooltip de productos vendidos (SKU + descripción), sin columna extra.
 - Configuración del sistema (`/settings`): admin puede modificar `opex_rate`; cambios auditados.
 - Inventario por factura/lote (oculta canceladas por defecto, con toggle).
+- Historial de ventas (`/sales`) con resumen de productos por venta y tooltip de detalle (SKU + descripción).
 - Auditoría (`/auditoria`) con `AuditLog`.
 - Admin puede crear usuario de inversionista y resetear su contraseña desde `Inversionistas`.
 - RBAC:

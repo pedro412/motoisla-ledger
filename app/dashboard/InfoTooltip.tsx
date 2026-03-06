@@ -1,7 +1,7 @@
 "use client";
 
 import { Info } from "lucide-react";
-import { useState, useRef } from "react";
+import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 type Props = {
