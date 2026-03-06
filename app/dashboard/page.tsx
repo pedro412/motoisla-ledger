@@ -3,6 +3,7 @@ import { CapitalMovementType, OwnerType, Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { TransferProfitButton } from "@/app/dashboard/TransferProfitButton";
 import { ChartsPanel } from "@/app/dashboard/ChartsPanel";
+import { InfoTooltip } from "@/app/dashboard/InfoTooltip";
 import { canAccessOwner, getSessionUser, isAdmin, isInvestor } from "@/lib/authz";
 
 type CapitalMovementView = {
@@ -10,6 +11,7 @@ type CapitalMovementView = {
   registeredAt: string;
   type: string;
   amount: number;
+  ownerId: string;
   referenceId: string;
   balanceAfter: number;
 };
@@ -84,7 +86,7 @@ export default async function DashboardPage({
     }),
     db.capitalMovement.findMany({
       where: { ownerId: selectedOwnerId },
-      select: { id: true, type: true, amount: true, date: true, createdAt: true, referenceId: true },
+      select: { id: true, ownerId: true, type: true, amount: true, date: true, createdAt: true, referenceId: true },
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     }),
   ]);
@@ -102,12 +104,19 @@ export default async function DashboardPage({
             where: { lotId: { in: lotIds } },
             select: {
               saleId: true,
+              sku: true,
               grossRevenue: true,
               terminalFee: true,
               netRevenue: true,
               profitGross: true,
               cogsGross: true,
               lotId: true,
+              lot: {
+                select: {
+                  ownerId: true,
+                  description: true,
+                },
+              },
             },
           }),
         ])
@@ -138,6 +147,16 @@ export default async function DashboardPage({
   const salePaymentBySaleId = new Map(
     sales.map((s) => [s.id, paymentLabelFromSale(s.terminalPayment, s.threeMonthsNoInterest, toNumber(s.commissionRate))]),
   );
+  const productsBySaleOwner = new Map<string, Array<{ sku: string; description: string }>>();
+  for (const line of saleLines) {
+    const mapKey = `${line.saleId}::${line.lot.ownerId}`;
+    const entry = productsBySaleOwner.get(mapKey) ?? [];
+    entry.push({
+      sku: line.sku,
+      description: line.lot.description,
+    });
+    productsBySaleOwner.set(mapKey, entry);
+  }
 
   const totalSales = round2(
     saleLines.reduce((acc, line) => acc + toNumber(line.grossRevenue), 0),
@@ -179,6 +198,7 @@ export default async function DashboardPage({
       registeredAt: formatDateTime(m.createdAt),
       type: m.type,
       amount: toNumber(m.amount),
+      ownerId: m.ownerId,
       referenceId: m.referenceId,
       balanceAfter: running,
     });
@@ -358,14 +378,28 @@ export default async function DashboardPage({
               {movementRows.map((item) => {
                 const sale = salesBySaleId.get(item.referenceId);
                 const margin = sale && sale.netRevenue > 0 ? (sale.profit / sale.netRevenue) * 100 : 0;
+                const isVenta = item.type === "VENTA_COSTO";
+                const movementProducts = uniqueProducts(productsBySaleOwner.get(`${item.referenceId}::${item.ownerId}`) ?? []);
                 return (
-                  <tr key={`${item.date}-${item.type}-${item.amount}`} className={`move-row ${movementRowClass(item.type)}`}>
+                  <tr key={`${item.registeredAt}-${item.referenceId}-${item.ownerId}-${item.type}-${item.amount}`} className={`move-row ${movementRowClass(item.type)}`}>
                     <td className="whitespace-nowrap">{item.registeredAt || "-"}</td>
                     <td>
                       <span className={`move-badge ${movementBadgeClass(item.type)}`}>{labelForMovementType(item.type)}</span>
                     </td>
                     <td className={`text-right font-semibold ${item.amount >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
-                      {item.amount >= 0 ? "+" : "-"}${formatMoney(Math.abs(item.amount))}
+                      <span className="inline-flex items-center justify-end gap-1">
+                        <span>{item.amount >= 0 ? "+" : "-"}${formatMoney(Math.abs(item.amount))}</span>
+                        {isVenta && movementProducts.length > 0 && (
+                          <InfoTooltip side="right">
+                            <p className="mb-2 font-semibold text-white">Productos del movimiento</p>
+                            <ul className="list-disc space-y-1 pl-4">
+                              {movementProducts.map((product) => (
+                                <li key={`${product.sku}-${product.description}`}>{product.sku} - {product.description}</li>
+                              ))}
+                            </ul>
+                          </InfoTooltip>
+                        )}
+                      </span>
                     </td>
                     <td>{item.type === "VENTA_COSTO" ? (salePaymentBySaleId.get(item.referenceId) ?? "-") : "-"}</td>
                     <td className="text-right">{item.type === "VENTA_COSTO" ? `$${formatMoney(sale?.profit ?? 0)}` : "-"}</td>
@@ -452,6 +486,23 @@ function paymentLabelFromSale(terminalPayment: boolean, threeMonthsNoInterest: b
 
 function round2(n: number) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
+function uniqueProducts(products: Array<{ sku: string; description: string }>) {
+  const seen = new Set<string>();
+  const out: Array<{ sku: string; description: string }> = [];
+
+  for (const product of products) {
+    const sku = String(product.sku || "").trim();
+    const description = String(product.description || "").replace(/\s+/g, " ").trim();
+    if (!sku && !description) continue;
+    const key = `${sku}::${description}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ sku: sku || "-", description: description || "-" });
+  }
+
+  return out;
 }
 
 function isInitialOrAdjustType(type: string) {

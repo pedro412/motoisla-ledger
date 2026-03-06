@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { getSessionUser, isStaff } from "@/lib/authz";
 import { DeleteSaleButton } from "@/app/sales/DeleteSaleButton";
+import { InfoTooltip } from "@/app/dashboard/InfoTooltip";
 
 export default async function SalesPage() {
   const user = await getSessionUser();
@@ -39,8 +40,10 @@ export default async function SalesPage() {
       lines: {
         select: {
           id: true,
+          sku: true,
           lot: {
             select: {
+              description: true,
               owner: {
                 select: { id: true, name: true },
               },
@@ -81,6 +84,7 @@ export default async function SalesPage() {
                 <th>ID Venta</th>
                 <th>Inversionista(s)</th>
                 <th>Líneas</th>
+                <th>Productos</th>
                 <th>Cobro</th>
                 <th>Bruto</th>
                 <th>Comisión</th>
@@ -103,6 +107,13 @@ export default async function SalesPage() {
                   sale.terminalPayment,
                   sale.threeMonthsNoInterest,
                 );
+                const products = uniqueProducts(
+                  sale.lines.map((line) => ({
+                    sku: line.sku,
+                    description: line.lot.description,
+                  })),
+                );
+                const productsSummary = summarizeProducts(products);
 
                 return (
                   <tr key={sale.id}>
@@ -110,6 +121,21 @@ export default async function SalesPage() {
                     <td className="font-mono text-sm">{sale.id}</td>
                     <td>{ownerLabels.join(", ") || "-"}</td>
                     <td>{sale.lines.length}</td>
+                    <td>
+                      {products.length > 0 ? (
+                        <span className="inline-flex items-center gap-1">
+                          <span>{productsSummary}</span>
+                          <InfoTooltip side="right">
+                            <p className="mb-2 font-semibold text-white">Productos vendidos</p>
+                            <ul className="list-disc space-y-1 pl-4">
+                              {products.map((product) => (
+                                <li key={`${product.sku}-${product.description}`}>{product.sku} - {product.description}</li>
+                              ))}
+                            </ul>
+                          </InfoTooltip>
+                        </span>
+                      ) : "-"}
+                    </td>
                     <td>{paymentLabel}</td>
                     <td className="text-right">${formatMoney(toNumber(sale.totalGross))}</td>
                     <td className="text-right">${formatMoney(toNumber(sale.terminalFeeTotal))}</td>
@@ -128,7 +154,7 @@ export default async function SalesPage() {
               })}
               {sales.length === 0 && (
                 <tr>
-                  <td colSpan={9}>Sin ventas todavía.</td>
+                  <td colSpan={10}>Sin ventas todavía.</td>
                 </tr>
               )}
             </tbody>
@@ -166,4 +192,28 @@ function paymentLabelFromSale(terminalPayment: boolean, threeMonthsNoInterest: b
   if (!terminalPayment) return "Sin terminal";
   if (threeMonthsNoInterest) return "Terminal 3 MSI";
   return "Terminal débito/1 exhibición";
+}
+
+function uniqueProducts(products: Array<{ sku: string; description: string }>) {
+  const seen = new Set<string>();
+  const out: Array<{ sku: string; description: string }> = [];
+
+  for (const product of products) {
+    const sku = String(product.sku || "").trim();
+    const description = String(product.description || "").replace(/\s+/g, " ").trim();
+    if (!sku && !description) continue;
+    const key = `${sku}::${description}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ sku: sku || "-", description: description || "-" });
+  }
+
+  return out;
+}
+
+function summarizeProducts(products: Array<{ sku: string; description: string }>) {
+  if (!products.length) return "-";
+  const first = `${products[0].sku} - ${products[0].description}`;
+  if (products.length === 1) return first;
+  return `${first} +${products.length - 1}`;
 }

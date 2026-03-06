@@ -1,5 +1,35 @@
 # Bitácora de Sesiones
 
+## 2026-03-06
+
+### Hecho
+
+- Se mejoró captura en `Nueva venta`:
+  - `Lot ID` cambió de input libre a selector (`select`) con etiqueta completa:
+    - `lotId | SKU | descripción corta | disponible | owner`
+  - Al seleccionar lote se conserva autocompletado de SKU y se muestra descripción del producto en el resumen de línea.
+  - Si cambia el filtro y un lote seleccionado ya no existe en opciones, la línea se limpia para evitar selección inválida.
+- Se enriqueció `Historial de ventas` (`/sales`):
+  - nueva columna de productos con resumen compacto por venta (`SKU - nombre +N`).
+  - tooltip con listado completo de productos vendidos (SKU + descripción).
+- Se ajustó `Dashboard` en tabla de movimientos de capital:
+  - para `VENTA_COSTO`, se muestra ícono junto al monto con tooltip de productos (SKU + descripción).
+  - no se agregó columna extra de productos (se mantiene ancho de tabla).
+  - el mapeo de productos se resuelve por `saleId + ownerId` para soportar ventas multi-owner.
+- Validación ejecutada:
+  - `npm run typecheck`
+  - `npm run test:run -- tests/integration/operationalFlow.test.ts tests/integration/saleDelete.test.ts`
+
+### Riesgos/Notas
+
+- El tooltip de productos depende de relaciones `SaleLine -> Lot`; si una venta antigua no trae líneas relacionadas, no mostrará detalle.
+- No hubo cambios de schema/migraciones; el detalle se calcula en lectura.
+
+### Próximos pasos
+
+1. Agregar prueba de UI/SSR para asegurar render estable de columna `Productos` en `/sales`.
+2. Evaluar truncado/scroll en tooltip para ventas con muchos productos.
+
 ## 2026-03-03
 
 ### Hecho

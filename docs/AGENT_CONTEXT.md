@@ -25,9 +25,12 @@ Sistema de control financiero para tienda con trazabilidad por inversionista:
   - marca compra/lotes como `CANCELLED`
   - crea reversa de capital (`REVERSA_COMPRA`)
 - Venta con validación de stock y comisiones terminal.
+- Nueva venta con selector de lote enriquecido (`lotId | SKU | descripción | disponibilidad | owner`) para facilitar captura.
 - Transferencia de utilidad a capital.
 - Dashboard por inversionista.
+- Movimientos de capital (`VENTA_COSTO`) con ícono + tooltip de productos vendidos (SKU + descripción), sin columna extra.
 - Inventario por factura/lote (oculta canceladas por defecto, con toggle).
+- Historial de ventas (`/sales`) con resumen de productos por venta y tooltip de detalle (SKU + descripción).
 - Auditoría (`/auditoria`) con `AuditLog`.
 - Admin puede crear usuario de inversionista y resetear su contraseña desde `Inversionistas`.
 - RBAC:

@@ -41,6 +41,17 @@ export default function NewSalePage() {
   const lotsById = useMemo(() => new Map(lots.map((lot) => [lot.lotId, lot])), [lots]);
 
   useEffect(() => {
+    setLines((prev) =>
+      prev.map((line) => {
+        if (!line.lotId) return line;
+        const lot = lotsById.get(line.lotId);
+        if (lot) return line;
+        return { ...line, lotId: "", sku: "" };
+      }),
+    );
+  }, [lotsById]);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function loadInvestorsAndLots() {
@@ -319,12 +330,18 @@ export default function NewSalePage() {
             <div className="grid">
               <label>
                 Lot ID
-                <input
+                <select
                   value={line.lotId}
                   onChange={(e) => updateLotId(i, e.target.value)}
-                  list="lots-options"
                   required
-                />
+                >
+                  <option value="">Selecciona lote</option>
+                  {lots.map((lot) => (
+                    <option key={lot.lotId} value={lot.lotId}>
+                      {buildLotOptionLabel(lot)}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label>SKU<input value={line.sku} onChange={(e) => updateLine(i, "sku", e.target.value)} required /></label>
               <label>
@@ -345,18 +362,11 @@ export default function NewSalePage() {
             {line.lotId && lotsById.get(line.lotId) && (
               <p style={{ marginTop: 8, fontSize: 13 }}>
                 Disponible total: {lotsById.get(line.lotId)?.qtyAvailable} | Disponible para esta línea: {getRemainingQtyForLine(i)} | Owner: {lotsById.get(line.lotId)?.ownerId} | SKU:{" "}
-                {lotsById.get(line.lotId)?.sku}
+                {lotsById.get(line.lotId)?.sku} | Producto: {lotsById.get(line.lotId)?.description}
               </p>
             )}
           </div>
         ))}
-        <datalist id="lots-options">
-          {lots.map((lot) => (
-            <option key={lot.lotId} value={lot.lotId}>
-              {`${lot.sku} | Disp: ${lot.qtyAvailable} | Owner: ${lot.ownerId}`}
-            </option>
-          ))}
-        </datalist>
 
         <div style={{ display: "flex", gap: 8 }}>
           <button type="button" onClick={addLine}>Agregar línea</button>
@@ -390,4 +400,15 @@ function formatMoney(n: number) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(n);
+}
+
+function buildLotOptionLabel(lot: LotOption) {
+  const shortDescription = truncate(lot.description, 52);
+  return `${lot.lotId} | ${lot.sku || "-"} | ${shortDescription} | Disp: ${lot.qtyAvailable} | Owner: ${lot.ownerId}`;
+}
+
+function truncate(text: string, max: number) {
+  const cleaned = String(text || "").replace(/\s+/g, " ").trim();
+  if (cleaned.length <= max) return cleaned;
+  return `${cleaned.slice(0, Math.max(0, max - 3))}...`;
 }
