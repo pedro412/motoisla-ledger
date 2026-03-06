@@ -82,7 +82,7 @@ export default async function DashboardPage({
     }),
     db.profitSplit.findMany({
       where: { ownerId: selectedOwnerId },
-      select: { profitShareGross: true },
+      select: { profitShareGross: true, opexDeduction: true },
     }),
     db.capitalMovement.findMany({
       where: { ownerId: selectedOwnerId },
@@ -122,28 +122,45 @@ export default async function DashboardPage({
         ])
       : [[], []];
 
-  const salesBySaleId = new Map<string, { grossRevenue: number; netRevenue: number; profit: number }>();
+  const salesBySaleId = new Map<string, { grossRevenue: number; terminalFee: number; netRevenue: number; cogs: number; profit: number }>();
   for (const sl of saleLines) {
-    const cur = salesBySaleId.get(sl.saleId) ?? { grossRevenue: 0, netRevenue: 0, profit: 0 };
-    cur.grossRevenue += toNumber(sl.grossRevenue);
-    cur.netRevenue += toNumber(sl.netRevenue);
-    cur.profit += toNumber(sl.profitGross);
+    const cur = salesBySaleId.get(sl.saleId) ?? { grossRevenue: 0, terminalFee: 0, netRevenue: 0, cogs: 0, profit: 0 };
+    cur.grossRevenue = round2(cur.grossRevenue + toNumber(sl.grossRevenue));
+    cur.terminalFee = round2(cur.terminalFee + toNumber(sl.terminalFee));
+    cur.netRevenue = round2(cur.netRevenue + toNumber(sl.netRevenue));
+    cur.cogs = round2(cur.cogs + toNumber(sl.cogsGross));
+    cur.profit = round2(cur.profit + toNumber(sl.profitGross));
     salesBySaleId.set(sl.saleId, cur);
   }
 
   const saleIds = Array.from(salesBySaleId.keys());
-  const sales = saleIds.length
-    ? await db.sale.findMany({
-        where: { id: { in: saleIds } },
-        select: {
-          id: true,
-          date: true,
-          terminalPayment: true,
-          threeMonthsNoInterest: true,
-          commissionRate: true,
-        },
-      })
-    : [];
+  const [sales, profitSplitsForSales] = saleIds.length
+    ? await Promise.all([
+        db.sale.findMany({
+          where: { id: { in: saleIds } },
+          select: {
+            id: true,
+            date: true,
+            terminalPayment: true,
+            threeMonthsNoInterest: true,
+            commissionRate: true,
+          },
+        }),
+        db.profitSplit.findMany({
+          where: { ownerId: selectedOwnerId, saleId: { in: saleIds } },
+          select: { saleId: true, profitShareGross: true, opexDeduction: true, opexRate: true },
+        }),
+      ])
+    : [[], []];
+
+  const profitBySaleId = new Map<string, { shareGross: number; opexDed: number; opexRate: number }>();
+  for (const ps of profitSplitsForSales) {
+    const cur = profitBySaleId.get(ps.saleId) ?? { shareGross: 0, opexDed: 0, opexRate: 0 };
+    cur.shareGross = round2(cur.shareGross + toNumber(ps.profitShareGross));
+    cur.opexDed = round2(cur.opexDed + toNumber(ps.opexDeduction ?? 0));
+    if (ps.opexRate) cur.opexRate = toNumber(ps.opexRate);
+    profitBySaleId.set(ps.saleId, cur);
+  }
   const salePaymentBySaleId = new Map(
     sales.map((s) => [s.id, paymentLabelFromSale(s.terminalPayment, s.threeMonthsNoInterest, toNumber(s.commissionRate))]),
   );
@@ -173,7 +190,10 @@ export default async function DashboardPage({
     }, 0),
   );
 
-  const accruedProfit = round2(profitSplits.reduce((acc, split) => acc + toNumber(split.profitShareGross), 0));
+  const opexTotal = round2(profitSplits.reduce((acc, s) => acc + toNumber(s.opexDeduction ?? 0), 0));
+  const accruedProfit = round2(
+    profitSplits.reduce((acc, split) => acc + toNumber(split.profitShareGross) - toNumber(split.opexDeduction ?? 0), 0),
+  );
   const transferredFromProfit = round2(
     movements
       .filter((m) => m.type === "UTILIDAD_A_CAPITAL")
@@ -332,9 +352,28 @@ export default async function DashboardPage({
             <div className="capital-value">${formatMoney(capitalPlusInventory)}</div>
           </div>
           <div className="capital-item capital-profit">
-            <div className="capital-label">Utilidad acumulada</div>
+            <div className="capital-label">Utilidad neta acumulada</div>
             <div className="capital-value">${formatMoney(accruedProfit)}</div>
           </div>
+          {opexTotal > 0 && (
+            <div className="capital-item">
+              <div className="capital-label flex items-center gap-1">
+                Gastos op. descontados
+                <InfoTooltip>
+                  <p className="font-semibold text-white">¿Qué es esto?</p>
+                  <p className="mt-1 text-slate-300">
+                    Estimación proporcional de los costos operativos de la tienda, descontada de tu utilidad antes del
+                    reparto a capital.
+                  </p>
+                  <p className="mt-2 font-mono text-slate-200">ventas brutas × tasa × 50%</p>
+                  <p className="mt-1 text-slate-400 text-[11px]">
+                    Solo aplica a ventas nuevas. Las ventas históricas no tienen descuento.
+                  </p>
+                </InfoTooltip>
+              </div>
+              <div className="capital-value text-rose-600">-${formatMoney(opexTotal)}</div>
+            </div>
+          )}
           <div className="capital-item capital-transferred">
             <div className="capital-label">Utilidad ya transferida</div>
             <div className="capital-value">${formatMoney(transferredFromProfit)}</div>
@@ -369,7 +408,7 @@ export default async function DashboardPage({
                 <th>Tipo</th>
                 <th>Monto</th>
                 <th>Cobro venta</th>
-                <th>Utilidad venta</th>
+                <th>Utilidad neta al inv.</th>
                 <th>Margen venta</th>
                 <th>Capital después</th>
               </tr>
@@ -377,9 +416,17 @@ export default async function DashboardPage({
             <tbody>
               {movementRows.map((item) => {
                 const sale = salesBySaleId.get(item.referenceId);
+                const profitData = profitBySaleId.get(item.referenceId);
                 const margin = sale && sale.netRevenue > 0 ? (sale.profit / sale.netRevenue) * 100 : 0;
                 const isVenta = item.type === "VENTA_COSTO";
                 const movementProducts = uniqueProducts(productsBySaleOwner.get(`${item.referenceId}::${item.ownerId}`) ?? []);
+
+                // Net profit = investor gross share − opex deduction
+                const shareGross = profitData?.shareGross ?? round2((sale?.profit ?? 0) * 0.5);
+                const opexDed = profitData?.opexDed ?? 0;
+                const netProfitShare = round2(shareGross - opexDed);
+                const hasOpex = opexDed > 0;
+                const opexRatePct = profitData && profitData.opexRate > 0 ? (profitData.opexRate * 100).toFixed(1) : null;
                 return (
                   <tr key={`${item.registeredAt}-${item.referenceId}-${item.ownerId}-${item.type}-${item.amount}`} className={`move-row ${movementRowClass(item.type)}`}>
                     <td className="whitespace-nowrap">{item.registeredAt || "-"}</td>
@@ -401,9 +448,58 @@ export default async function DashboardPage({
                         )}
                       </span>
                     </td>
-                    <td>{item.type === "VENTA_COSTO" ? (salePaymentBySaleId.get(item.referenceId) ?? "-") : "-"}</td>
-                    <td className="text-right">{item.type === "VENTA_COSTO" ? `$${formatMoney(sale?.profit ?? 0)}` : "-"}</td>
-                    <td className="text-right">{item.type === "VENTA_COSTO" ? `${margin.toFixed(2)}%` : "-"}</td>
+                    <td>{isVenta ? (salePaymentBySaleId.get(item.referenceId) ?? "-") : "-"}</td>
+                    <td className="text-right">
+                      {isVenta && sale ? (
+                        <span className="inline-flex items-center justify-end gap-1">
+                          <span className={hasOpex ? "font-semibold text-emerald-700" : ""}>
+                            ${formatMoney(netProfitShare)}
+                          </span>
+                          <InfoTooltip side="right">
+                            <p className="mb-2 font-semibold text-white">Cálculo de utilidad neta</p>
+                            <div className="space-y-0.5 font-mono text-[11px]">
+                              <div className="flex justify-between gap-4">
+                                <span className="text-slate-400">Ventas brutas</span>
+                                <span>${formatMoney(sale.grossRevenue)}</span>
+                              </div>
+                              {sale.terminalFee > 0 && (
+                                <div className="flex justify-between gap-4 text-rose-300">
+                                  <span>− Com. terminal</span>
+                                  <span>−${formatMoney(sale.terminalFee)}</span>
+                                </div>
+                              )}
+                              <div className="flex justify-between gap-4 border-t border-slate-700 pt-0.5">
+                                <span className="text-slate-400">= Venta neta</span>
+                                <span>${formatMoney(sale.netRevenue)}</span>
+                              </div>
+                              <div className="flex justify-between gap-4 text-rose-300">
+                                <span>− Costo merch.</span>
+                                <span>−${formatMoney(sale.cogs)}</span>
+                              </div>
+                              <div className="flex justify-between gap-4 border-t border-slate-700 pt-0.5">
+                                <span className="text-slate-400">= Util. bruta</span>
+                                <span>${formatMoney(sale.profit)}</span>
+                              </div>
+                              <div className="flex justify-between gap-4 text-slate-300">
+                                <span>÷ Tu parte (50%)</span>
+                                <span>${formatMoney(shareGross)}</span>
+                              </div>
+                              {hasOpex && opexRatePct && (
+                                <div className="flex justify-between gap-4 text-rose-300">
+                                  <span>− Gastos op. {opexRatePct}%</span>
+                                  <span>−${formatMoney(opexDed)}</span>
+                                </div>
+                              )}
+                              <div className="flex justify-between gap-4 border-t border-slate-600 pt-0.5 font-semibold text-white">
+                                <span>= Util. neta</span>
+                                <span>${formatMoney(netProfitShare)}</span>
+                              </div>
+                            </div>
+                          </InfoTooltip>
+                        </span>
+                      ) : "-"}
+                    </td>
+                    <td className="text-right">{isVenta ? `${margin.toFixed(2)}%` : "-"}</td>
                     <td className="text-right font-semibold">${formatMoney(item.balanceAfter)}</td>
                   </tr>
                 );

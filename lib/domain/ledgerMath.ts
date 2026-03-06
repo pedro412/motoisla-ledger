@@ -58,6 +58,10 @@ export function splitProfit50_50(profit: number) {
   return { investor, motoIsla };
 }
 
+export function computeOpexDeduction(grossRevenue: number, opexRate: number): number {
+  return round2(grossRevenue * opexRate * 0.5);
+}
+
 function round2(n: number) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }

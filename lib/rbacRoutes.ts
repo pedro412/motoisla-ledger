@@ -8,6 +8,8 @@ export function isBlockedPathForInvestor(pathname: string) {
     pathname.startsWith("/api/users") ||
     pathname.startsWith("/api/investors") ||
     pathname.startsWith("/api/capital/reconcile") ||
-    pathname.startsWith("/api/health")
+    pathname.startsWith("/api/health") ||
+    pathname.startsWith("/settings") ||
+    pathname.startsWith("/api/settings")
   );
 }

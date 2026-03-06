@@ -177,12 +177,22 @@ async function runSeed(options = {}) {
   if (mode === "bootstrap") {
     const owners = parseBootstrapOwners(env.SEED_BOOTSTRAP_OWNERS_JSON);
     const ownersCreated = await seedOwners(prismaClient, owners);
+    await prismaClient.systemSetting.upsert({
+      where: { key: "opex_rate" },
+      update: {},
+      create: { key: "opex_rate", value: "0.175" },
+    });
     logger.log(`[seed] bootstrap completado. Owners upserted: ${ownersCreated}. Usuarios creados: 0.`);
     return { mode, ownersCreated, usersCreated: 0 };
   }
 
   const devOwners = inferDefaultDevOwners(env);
   const ownersCreated = await seedOwners(prismaClient, devOwners.owners);
+  await prismaClient.systemSetting.upsert({
+    where: { key: "opex_rate" },
+    update: {},
+    create: { key: "opex_rate", value: "0.175" },
+  });
   const users = await seedDevUsers(prismaClient, bcryptModule, env, devOwners.investorId);
   logger.log("[seed] dev completado (solo desarrollo).");
   logger.log(`- Owners upserted: ${ownersCreated}`);

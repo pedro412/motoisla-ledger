@@ -19,16 +19,18 @@ Sistema de control financiero para tienda con trazabilidad por inversionista:
 
 ## Estado funcional (actual)
 
-- Compra con parser por formato (`LS2`, `EDGE`) + preview previa a importar.
+- Compra con parser por formato (`LS2`, `EDGE`, `JOE_ROCKET`) + preview previa a importar.
 - Cancelación de compra auditable:
   - bloquea cancelación si ya hubo ventas de sus lotes
   - marca compra/lotes como `CANCELLED`
   - crea reversa de capital (`REVERSA_COMPRA`)
 - Venta con validación de stock y comisiones terminal.
 - Nueva venta con selector de lote enriquecido (`lotId | SKU | descripción | disponibilidad | owner`) para facilitar captura.
+- **Gastos operativos configurables**: tasa fija (`opex_rate`) aplicada sobre ventas brutas; `opexDeduction` guardado por `ProfitSplit`; utilidad neta = `profitShareGross − opexDeduction`.
 - Transferencia de utilidad a capital.
-- Dashboard por inversionista.
+- Dashboard por inversionista con desglose opex y tooltip de cálculo exacto por venta.
 - Movimientos de capital (`VENTA_COSTO`) con ícono + tooltip de productos vendidos (SKU + descripción), sin columna extra.
+- Configuración del sistema (`/settings`): admin puede modificar `opex_rate`; cambios auditados.
 - Inventario por factura/lote (oculta canceladas por defecto, con toggle).
 - Historial de ventas (`/sales`) con resumen de productos por venta y tooltip de detalle (SKU + descripción).
 - Auditoría (`/auditoria`) con `AuditLog`.
@@ -46,6 +48,7 @@ Sistema de control financiero para tienda con trazabilidad por inversionista:
 - `/sales/new`
 - `/investors`
 - `/auditoria`
+- `/settings` (solo ADMIN)
 - `/login`
 
 ## APIs clave
@@ -57,6 +60,8 @@ Sistema de control financiero para tienda con trazabilidad por inversionista:
 - `POST /api/capital/reconcile`
 - `GET /api/lots`
 - `GET /api/investors`
+- `GET /api/settings` (solo ADMIN)
+- `PATCH /api/settings` (solo ADMIN)
 
 ## Pendientes prioritarios
 

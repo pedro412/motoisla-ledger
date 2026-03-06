@@ -7,6 +7,7 @@ const dbMocks = vi.hoisted(() => ({
   $transaction: vi.fn(),
   lot: { findMany: vi.fn() },
   saleLine: { groupBy: vi.fn() },
+  systemSetting: { findUnique: vi.fn().mockResolvedValue(null) },
 }));
 
 const capitalMocks = vi.hoisted(() => ({

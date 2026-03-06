@@ -51,6 +51,7 @@ enum AuditEntity {
   CAPITAL_MOVEMENT
   PROFIT_SPLIT
   LOT
+  SETTING
 }
 
 model Owner {
@@ -204,6 +205,8 @@ model ProfitSplit {
   saleLineId       String?
   ownerId          String
   profitShareGross Decimal          @db.Decimal(14, 2)
+  opexRate         Decimal?         @db.Decimal(8, 6)
+  opexDeduction    Decimal?         @db.Decimal(14, 2)
   status           ProfitSplitStatus
   createdAt        DateTime         @default(now())
   sale             Sale             @relation(fields: [saleId], references: [id], onDelete: Cascade)
@@ -212,6 +215,13 @@ model ProfitSplit {
 
   @@index([saleId])
   @@index([ownerId])
+}
+
+model SystemSetting {
+  key             String   @id
+  value           String
+  updatedAt       DateTime @updatedAt
+  updatedByUserId String?
 }
 
 model User {
